@@ -1,12 +1,36 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { motion } from 'framer-motion';
+import NoteCanvas from '@/components/NoteCanvas';
+import { Sparkles } from 'lucide-react';
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <motion.header
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="text-center py-6 px-4"
+      >
+        <h1 className="text-3xl md:text-4xl font-handwriting text-foreground flex items-center justify-center gap-2">
+          <Sparkles className="w-6 h-6 text-primary" />
+          Old School Notes
+          <Sparkles className="w-6 h-6 text-primary" />
+        </h1>
+        <p className="text-sm font-handwriting-patrick text-muted-foreground mt-1">
+          Write it. Stick it. Send it. ✂️📌
+        </p>
+      </motion.header>
+
+      {/* Main */}
+      <main className="flex-1 flex items-start justify-center pb-8">
+        <NoteCanvas />
+      </main>
+
+      {/* Footer */}
+      <footer className="text-center py-3 text-xs text-muted-foreground font-handwriting-patrick">
+        Made with ❤️ and nostalgia
+      </footer>
     </div>
   );
 };
