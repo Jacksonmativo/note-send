@@ -13,6 +13,12 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        handwriting: ['Caveat', 'cursive'],
+        'handwriting-alt': ['Gloria Hallelujah', 'cursive'],
+        'handwriting-indie': ['Indie Flower', 'cursive'],
+        'handwriting-patrick': ['Patrick Hand', 'cursive'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -46,6 +52,22 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        ink: {
+          blue: "hsl(var(--ink-blue))",
+          black: "hsl(var(--ink-black))",
+          red: "hsl(var(--ink-red))",
+        },
+        paper: {
+          cream: "hsl(var(--paper-cream))",
+          shadow: "hsl(var(--paper-shadow))",
+        },
+        sticker: {
+          pink: "hsl(var(--sticker-pink))",
+          lavender: "hsl(var(--sticker-lavender))",
+        },
+        tape: {
+          yellow: "hsl(var(--tape-yellow))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
