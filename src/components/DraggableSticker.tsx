@@ -6,6 +6,10 @@ export interface PlacedSticker {
   stickerId: string;
   emoji?: string;
   imageUrl?: string;
+  textContent?: string;
+  textFont?: string;
+  textColor?: string;
+  textSize?: number;
   x: number;
   y: number;
   rotation: number;
@@ -153,7 +157,19 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {sticker.imageUrl ? (
+      {sticker.textContent !== undefined ? (
+        <div
+          className="min-w-[60px] max-w-[220px] px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words"
+          style={{
+            fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
+            fontSize: `${sticker.textSize || 24}px`,
+            color: sticker.textColor || 'hsl(215, 60%, 35%)',
+            lineHeight: '1.4',
+          }}
+        >
+          {sticker.textContent || 'Double-click to edit'}
+        </div>
+      ) : sticker.imageUrl ? (
         <img
           src={sticker.imageUrl}
           alt="sticker"

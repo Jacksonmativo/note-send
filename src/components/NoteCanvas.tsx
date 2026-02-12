@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, RotateCcw, Sparkles } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Type } from 'lucide-react';
 import { motion } from 'framer-motion';
 import notebookBg from '@/assets/notebook-bg.jpg';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
@@ -11,18 +11,44 @@ import type { StickerItem, InkColor } from './StickerData';
 
 const NoteCanvas = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState('');
   const [inkColor, setInkColor] = useState<InkColor>('blue');
   const [fontFamily, setFontFamily] = useState('Caveat');
   const [fontSize, setFontSize] = useState(24);
   const [stickers, setStickers] = useState<PlacedSticker[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const inkCssMap: Record<InkColor, string> = {
     blue: 'hsl(215, 60%, 35%)',
     black: 'hsl(220, 20%, 15%)',
     red: 'hsl(0, 70%, 50%)',
   };
+
+  const addTextBox = useCallback(() => {
+    const randomTilt = Math.floor(Math.random() * 10) - 5;
+    const randomX = 40 + Math.random() * 150;
+    const randomY = 60 + Math.random() * 200;
+    const id = `text-${Date.now()}`;
+    setStickers((prev) => [
+      ...prev,
+      {
+        instanceId: id,
+        stickerId: 'text-box',
+        textContent: 'Your text here',
+        textFont: fontFamily,
+        textColor: inkCssMap[inkColor],
+        textSize: fontSize,
+        x: randomX,
+        y: randomY,
+        rotation: randomTilt,
+        scale: 1,
+      },
+    ]);
+    // Immediately open edit for the new textbox
+    setEditingId(id);
+    setEditText('Your text here');
+  }, [fontFamily, fontSize, inkColor, inkCssMap]);
 
   const addSticker = useCallback((item: StickerItem) => {
     const randomTilt = Math.floor(Math.random() * 30) - 15;
@@ -50,7 +76,8 @@ const NoteCanvas = () => {
 
   const deleteSticker = useCallback((instanceId: string) => {
     setStickers((prev) => prev.filter((s) => s.instanceId !== instanceId));
-  }, []);
+    if (editingId === instanceId) setEditingId(null);
+  }, [editingId]);
 
   const addImageSticker = useCallback((imageUrl: string) => {
     const randomTilt = Math.floor(Math.random() * 20) - 10;
@@ -70,8 +97,30 @@ const NoteCanvas = () => {
     ]);
   }, []);
 
+  const handleStickerClick = useCallback((sticker: PlacedSticker) => {
+    if (sticker.textContent !== undefined) {
+      setEditingId(sticker.instanceId);
+      setEditText(sticker.textContent);
+    }
+  }, []);
+
+  const commitEdit = useCallback(() => {
+    if (editingId) {
+      setStickers((prev) =>
+        prev.map((s) =>
+          s.instanceId === editingId
+            ? { ...s, textContent: editText.slice(0, 300) }
+            : s
+        )
+      );
+      setEditingId(null);
+    }
+  }, [editingId, editText]);
+
   const handleExport = async () => {
     if (!canvasRef.current) return;
+    // Close any open edit first
+    commitEdit();
     setIsExporting(true);
     try {
       const dataUrl = await toPng(canvasRef.current, {
@@ -90,8 +139,8 @@ const NoteCanvas = () => {
   };
 
   const handleReset = () => {
-    setText('');
     setStickers([]);
+    setEditingId(null);
   };
 
   return (
@@ -111,6 +160,14 @@ const NoteCanvas = () => {
           onFontChange={setFontFamily}
           onSizeChange={setFontSize}
         />
+        {/* Add Text Button */}
+        <button
+          onClick={addTextBox}
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+        >
+          <Type className="w-4 h-4" />
+          Add Text Box
+        </button>
         <div className="border-t border-border" />
         <StickerPanel onAddSticker={addSticker} />
         <div className="border-t border-border" />
@@ -150,44 +207,55 @@ const NoteCanvas = () => {
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
+          onClick={() => { if (editingId) commitEdit(); }}
         >
-          {/* Text area overlay */}
-          <div className="absolute inset-0 flex items-start justify-center p-12 pt-16">
-            <textarea
-              value={text}
-              onChange={(e) => {
-                if (e.target.value.length <= 300) setText(e.target.value);
-              }}
-              placeholder="Write your note here..."
-              maxLength={300}
-              className="w-full h-full bg-transparent border-none outline-none resize-none leading-[1.85rem] placeholder:opacity-30"
-              style={{
-                fontFamily: `'${fontFamily}', cursive`,
-                fontSize: `${fontSize}px`,
-                color: inkCssMap[inkColor],
-                lineHeight: '1.85rem',
-              }}
-            />
-          </div>
-
-          {/* Character count */}
-          <div
-            className="absolute bottom-3 right-4 text-xs font-handwriting-patrick opacity-30"
-            style={{ color: inkCssMap[inkColor] }}
-          >
-            {text.length}/300
-          </div>
-
-          {/* Stickers */}
+          {/* Stickers & Text Boxes */}
           {stickers.map((sticker) => (
-            <DraggableSticker
-              key={sticker.instanceId}
-              sticker={sticker}
-              onUpdate={updateSticker}
-              onDelete={deleteSticker}
-              containerRef={canvasRef}
-            />
+            <div key={sticker.instanceId} onDoubleClick={() => handleStickerClick(sticker)}>
+              <DraggableSticker
+                sticker={sticker}
+                onUpdate={updateSticker}
+                onDelete={deleteSticker}
+                containerRef={canvasRef}
+              />
+            </div>
           ))}
+
+          {/* Inline text editor overlay */}
+          {editingId && (() => {
+            const s = stickers.find((st) => st.instanceId === editingId);
+            if (!s) return null;
+            return (
+              <div
+                className="absolute z-[100]"
+                style={{ left: s.x, top: s.y, transform: `rotate(${s.rotation}deg) scale(${s.scale})` }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <textarea
+                  autoFocus
+                  value={editText}
+                  onChange={(e) => {
+                    if (e.target.value.length <= 300) setEditText(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); }
+                    if (e.key === 'Escape') commitEdit();
+                  }}
+                  className="min-w-[120px] max-w-[220px] min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize"
+                  style={{
+                    fontFamily: `'${s.textFont || 'Caveat'}', cursive`,
+                    fontSize: `${s.textSize || 24}px`,
+                    color: s.textColor || 'hsl(215, 60%, 35%)',
+                    lineHeight: '1.4',
+                  }}
+                  maxLength={300}
+                />
+                <div className="text-xs text-muted-foreground font-handwriting-patrick mt-1">
+                  {editText.length}/300 · Enter to save
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </motion.div>
     </div>
