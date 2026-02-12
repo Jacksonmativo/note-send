@@ -95,6 +95,48 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
     onUpdate({ ...sticker, rotation: sticker.rotation + 15 });
   };
 
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startScale = sticker.scale;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - startX;
+      const newScale = Math.max(0.3, Math.min(3, startScale + dx / 100));
+      onUpdate({ ...sticker, scale: newScale });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [sticker, onUpdate]);
+
+  const handleResizeTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    const startX = e.touches[0].clientX;
+    const startScale = sticker.scale;
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - startX;
+      const newScale = Math.max(0.3, Math.min(3, startScale + dx / 100));
+      onUpdate({ ...sticker, scale: newScale });
+    };
+
+    const handleTouchEnd = () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }, [sticker, onUpdate]);
+
   return (
     <div
       className="absolute select-none group"
@@ -137,6 +179,16 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
           >
             <RotateCw className="w-3 h-3" />
           </button>
+          <div
+            onMouseDown={handleResizeMouseDown}
+            onTouchStart={handleResizeTouchStart}
+            className="absolute -bottom-2 -left-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-primary-foreground opacity-80 hover:opacity-100 transition-opacity cursor-nwse-resize"
+            title="Drag to resize"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M1 9L9 1M4 9L9 4M7 9L9 7" />
+            </svg>
+          </div>
         </>
       )}
     </div>
