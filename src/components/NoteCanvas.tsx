@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import notebookBg from '@/assets/notebook-bg.jpg';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
 import StickerPanel from './StickerPanel';
+import ImageUploadPanel from './ImageUploadPanel';
 import TextControls from './TextControls';
 import type { StickerItem, InkColor } from './StickerData';
 
@@ -51,6 +52,24 @@ const NoteCanvas = () => {
     setStickers((prev) => prev.filter((s) => s.instanceId !== instanceId));
   }, []);
 
+  const addImageSticker = useCallback((imageUrl: string) => {
+    const randomTilt = Math.floor(Math.random() * 20) - 10;
+    const randomX = 80 + Math.random() * 200;
+    const randomY = 80 + Math.random() * 250;
+    setStickers((prev) => [
+      ...prev,
+      {
+        instanceId: `img-${Date.now()}`,
+        stickerId: 'custom-image',
+        imageUrl,
+        x: randomX,
+        y: randomY,
+        rotation: randomTilt,
+        scale: 1,
+      },
+    ]);
+  }, []);
+
   const handleExport = async () => {
     if (!canvasRef.current) return;
     setIsExporting(true);
@@ -94,6 +113,8 @@ const NoteCanvas = () => {
         />
         <div className="border-t border-border" />
         <StickerPanel onAddSticker={addSticker} />
+        <div className="border-t border-border" />
+        <ImageUploadPanel onAddImageSticker={addImageSticker} />
         <div className="border-t border-border" />
         <div className="flex flex-col gap-2">
           <button

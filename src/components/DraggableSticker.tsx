@@ -4,7 +4,8 @@ import { X, RotateCw } from 'lucide-react';
 export interface PlacedSticker {
   instanceId: string;
   stickerId: string;
-  emoji: string;
+  emoji?: string;
+  imageUrl?: string;
   x: number;
   y: number;
   rotation: number;
@@ -110,9 +111,18 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <span className="text-4xl sticker-shadow select-none pointer-events-none">
-        {sticker.emoji}
-      </span>
+      {sticker.imageUrl ? (
+        <img
+          src={sticker.imageUrl}
+          alt="sticker"
+          className="w-16 h-16 object-contain sticker-shadow select-none pointer-events-none"
+          draggable={false}
+        />
+      ) : (
+        <span className="text-4xl sticker-shadow select-none pointer-events-none">
+          {sticker.emoji}
+        </span>
+      )}
       {isHovered && !isDragging && (
         <>
           <button
