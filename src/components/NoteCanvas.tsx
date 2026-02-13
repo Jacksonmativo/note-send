@@ -2,11 +2,11 @@ import { useState, useRef, useCallback } from 'react';
 import { toPng } from 'html-to-image';
 import { Download, RotateCcw, Sparkles, Type } from 'lucide-react';
 import { motion } from 'framer-motion';
-import notebookBg from '@/assets/notebook-bg.jpg';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
 import StickerPanel from './StickerPanel';
 import ImageUploadPanel from './ImageUploadPanel';
 import TextControls from './TextControls';
+import BackgroundSelector, { backgrounds } from './BackgroundSelector';
 import type { StickerItem, InkColor } from './StickerData';
 
 const NoteCanvas = () => {
@@ -15,6 +15,7 @@ const NoteCanvas = () => {
   const [fontFamily, setFontFamily] = useState('Caveat');
   const [fontSize, setFontSize] = useState(24);
   const [stickers, setStickers] = useState<PlacedSticker[]>([]);
+  const [backgroundId, setBackgroundId] = useState('notebook');
   const [isExporting, setIsExporting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -119,21 +120,40 @@ const NoteCanvas = () => {
 
   const handleExport = async () => {
     if (!canvasRef.current) return;
-    // Close any open edit first
     commitEdit();
     setIsExporting(true);
     try {
+      // Use multiple attempts for reliability
       const dataUrl = await toPng(canvasRef.current, {
         quality: 1,
         pixelRatio: 2,
         cacheBust: true,
+        skipAutoScale: true,
       });
       const link = document.createElement('a');
-      link.download = 'old-school-note.png';
+      link.download = `note-${Date.now()}.png`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
       console.error('Export failed:', err);
+      // Retry once
+      try {
+        const dataUrl = await toPng(canvasRef.current!, {
+          quality: 1,
+          pixelRatio: 2,
+          cacheBust: true,
+        });
+        const link = document.createElement('a');
+        link.download = `note-${Date.now()}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (retryErr) {
+        console.error('Export retry failed:', retryErr);
+      }
     }
     setIsExporting(false);
   };
@@ -169,6 +189,8 @@ const NoteCanvas = () => {
           Add Text Box
         </button>
         <div className="border-t border-border" />
+        <BackgroundSelector selected={backgroundId} onSelect={setBackgroundId} />
+        <div className="border-t border-border" />
         <StickerPanel onAddSticker={addSticker} />
         <div className="border-t border-border" />
         <ImageUploadPanel onAddImageSticker={addImageSticker} />
@@ -203,7 +225,7 @@ const NoteCanvas = () => {
           ref={canvasRef}
           className="relative w-full max-w-lg aspect-[3/4] rounded-lg overflow-hidden paper-shadow"
           style={{
-            backgroundImage: `url(${notebookBg})`,
+            backgroundImage: `url(${backgrounds.find(b => b.id === backgroundId)?.src || backgrounds[0].src})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
