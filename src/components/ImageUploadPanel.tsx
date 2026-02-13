@@ -1,19 +1,16 @@
-import { useState, useRef } from 'react';
-import { Upload, Loader2, ImageOff } from 'lucide-react';
-import { removeBackground } from '@imgly/background-removal';
+import { useState, useRef, useCallback } from 'react';
+import { Upload, Crop, Check, X } from 'lucide-react';
 
 interface ImageUploadPanelProps {
   onAddImageSticker: (imageUrl: string) => void;
 }
 
-// Convert a blob/file to a data URL and optionally resize large images
 const toDataUrl = (source: Blob | File, maxSize = 800): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        // Resize if too large
         let { width, height } = img;
         if (width > maxSize || height > maxSize) {
           const ratio = Math.min(maxSize / width, maxSize / height);
@@ -36,81 +33,107 @@ const toDataUrl = (source: Blob | File, maxSize = 800): Promise<string> => {
 };
 
 const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
-  const [removeBg, setRemoveBg] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const cropAreaRef = useRef<HTMLDivElement>(null);
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropBox, setCropBox] = useState({ x: 10, y: 10, w: 80, h: 80 }); // percentages
+  const [dragState, setDragState] = useState<null | { type: 'move' | 'resize'; startX: number; startY: number; startCrop: typeof cropBox }>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !file.type.startsWith('image/')) return;
 
-    if (!file.type.startsWith('image/')) return;
+    const dataUrl = await toDataUrl(file);
+    setPreviewUrl(dataUrl);
+    setIsCropping(true);
+    setCropBox({ x: 10, y: 10, w: 80, h: 80 });
 
-    setIsProcessing(true);
-    setPreviewUrl(null);
-
-    try {
-      if (removeBg) {
-        const blob = await removeBackground(file, {
-          output: { format: 'image/png' },
-        });
-        const dataUrl = await toDataUrl(blob);
-        setPreviewUrl(dataUrl);
-        onAddImageSticker(dataUrl);
-      } else {
-        const dataUrl = await toDataUrl(file);
-        setPreviewUrl(dataUrl);
-        onAddImageSticker(dataUrl);
-      }
-    } catch (err) {
-      console.error('Image processing failed:', err);
-      const dataUrl = await toDataUrl(file);
-      setPreviewUrl(dataUrl);
-      onAddImageSticker(dataUrl);
-    }
-
-    setIsProcessing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getRelativePos = useCallback((clientX: number, clientY: number) => {
+    const area = cropAreaRef.current;
+    if (!area) return { px: 0, py: 0 };
+    const rect = area.getBoundingClientRect();
+    return {
+      px: ((clientX - rect.left) / rect.width) * 100,
+      py: ((clientY - rect.top) / rect.height) * 100,
+    };
+  }, []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent, type: 'move' | 'resize') => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { px, py } = getRelativePos(e.clientX, e.clientY);
+    setDragState({ type, startX: px, startY: py, startCrop: { ...cropBox } });
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [cropBox, getRelativePos]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragState) return;
+    const { px, py } = getRelativePos(e.clientX, e.clientY);
+    const dx = px - dragState.startX;
+    const dy = py - dragState.startY;
+    const s = dragState.startCrop;
+
+    if (dragState.type === 'move') {
+      const newX = Math.max(0, Math.min(100 - s.w, s.x + dx));
+      const newY = Math.max(0, Math.min(100 - s.h, s.y + dy));
+      setCropBox({ ...s, x: newX, y: newY });
+    } else {
+      const newW = Math.max(10, Math.min(100 - s.x, s.w + dx));
+      const newH = Math.max(10, Math.min(100 - s.y, s.h + dy));
+      setCropBox({ ...s, w: newW, h: newH });
+    }
+  }, [dragState, getRelativePos]);
+
+  const handlePointerUp = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  const applyCrop = useCallback(() => {
+    if (!previewUrl) return;
+    const img = imgRef.current;
+    if (!img) return;
+
+    const canvas = document.createElement('canvas');
+    const sx = (cropBox.x / 100) * img.naturalWidth;
+    const sy = (cropBox.y / 100) * img.naturalHeight;
+    const sw = (cropBox.w / 100) * img.naturalWidth;
+    const sh = (cropBox.h / 100) * img.naturalHeight;
+
+    canvas.width = Math.round(sw);
+    canvas.height = Math.round(sh);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    const croppedUrl = canvas.toDataURL('image/png');
+    onAddImageSticker(croppedUrl);
+    setIsCropping(false);
+    setPreviewUrl(croppedUrl);
+  }, [previewUrl, cropBox, onAddImageSticker]);
+
+  const cancelCrop = () => {
+    setIsCropping(false);
+    setPreviewUrl(null);
   };
 
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-handwriting-patrick text-muted-foreground tracking-wide uppercase">
-        📷 Upload Cutout
+        📷 Upload Image
       </h3>
 
-      {/* Remove BG toggle */}
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={removeBg}
-          onChange={(e) => setRemoveBg(e.target.checked)}
-          className="accent-primary w-4 h-4 rounded"
-        />
-        <span className="text-xs font-handwriting-patrick text-muted-foreground flex items-center gap-1">
-          <ImageOff className="w-3 h-3" />
-          Remove background
-        </span>
-      </label>
-
-      {/* Upload button */}
       <button
         onClick={() => fileInputRef.current?.click()}
-        disabled={isProcessing}
+        disabled={isCropping}
         className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-border bg-secondary/50 text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors disabled:opacity-50"
       >
-        {isProcessing ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            <Upload className="w-4 h-4" />
-            Choose Image
-          </>
-        )}
+        <Upload className="w-4 h-4" />
+        Choose Image
       </button>
 
       <input
@@ -121,17 +144,87 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
         className="hidden"
       />
 
-      {/* Preview */}
-      {previewUrl && (
-        <div className="relative w-16 h-16 mx-auto rounded-md overflow-hidden border border-border bg-[repeating-conic-gradient(hsl(var(--muted))_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
-          <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+      {/* Crop UI */}
+      {isCropping && previewUrl && (
+        <div className="flex flex-col gap-2">
+          <div
+            ref={cropAreaRef}
+            className="relative w-full aspect-square rounded-md overflow-hidden border border-border bg-muted"
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            <img
+              ref={imgRef}
+              src={previewUrl}
+              alt="Crop preview"
+              className="w-full h-full object-contain"
+              draggable={false}
+            />
+            {/* Dimming overlay */}
+            <div className="absolute inset-0" style={{
+              background: `linear-gradient(to right, 
+                rgba(0,0,0,0.5) ${cropBox.x}%, 
+                transparent ${cropBox.x}%, 
+                transparent ${cropBox.x + cropBox.w}%, 
+                rgba(0,0,0,0.5) ${cropBox.x + cropBox.w}%)`,
+            }} />
+            <div className="absolute" style={{
+              left: `${cropBox.x}%`,
+              width: `${cropBox.w}%`,
+              top: 0,
+              height: `${cropBox.y}%`,
+              background: 'rgba(0,0,0,0.5)',
+            }} />
+            <div className="absolute" style={{
+              left: `${cropBox.x}%`,
+              width: `${cropBox.w}%`,
+              top: `${cropBox.y + cropBox.h}%`,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+            }} />
+
+            {/* Crop selection */}
+            <div
+              className="absolute border-2 border-white cursor-move"
+              style={{
+                left: `${cropBox.x}%`,
+                top: `${cropBox.y}%`,
+                width: `${cropBox.w}%`,
+                height: `${cropBox.h}%`,
+              }}
+              onPointerDown={(e) => handlePointerDown(e, 'move')}
+            >
+              {/* Resize handle */}
+              <div
+                className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white rounded-full border border-primary cursor-nwse-resize"
+                onPointerDown={(e) => handlePointerDown(e, 'resize')}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={applyCrop}
+              className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+            >
+              <Check className="w-3 h-3" />
+              Crop & Add
+            </button>
+            <button
+              onClick={cancelCrop}
+              className="flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 
-      {isProcessing && (
-        <p className="text-[10px] font-handwriting-patrick text-muted-foreground text-center">
-          First time may take a moment to download the AI model...
-        </p>
+      {/* Thumbnail of last added */}
+      {!isCropping && previewUrl && (
+        <div className="relative w-16 h-16 mx-auto rounded-md overflow-hidden border border-border bg-[repeating-conic-gradient(hsl(var(--muted))_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
+          <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+        </div>
       )}
     </div>
   );
