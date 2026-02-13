@@ -28,8 +28,9 @@ const Index = () => {
       </main>
 
       {/* Footer */}
-      <footer className="text-center py-3 text-xs text-muted-foreground font-handwriting-patrick">
-        Made with ❤️ and nostalgia
+      <footer className="text-center py-3 text-xs text-muted-foreground font-handwriting-patrick space-y-1">
+        <p>Made with ❤️ and nostalgia</p>
+        <p>By me coffee ☕ M-Pesa: 0702188406 — Jackson Mativo</p>
       </footer>
     </div>
   );

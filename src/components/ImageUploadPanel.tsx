@@ -36,7 +36,7 @@ const toDataUrl = (source: Blob | File, maxSize = 800): Promise<string> => {
 };
 
 const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
-  const [removeBg, setRemoveBg] = useState(true);
+  const [removeBg, setRemoveBg] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
