@@ -173,7 +173,7 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
         <img
           src={sticker.imageUrl}
           alt="sticker"
-          className="w-16 h-16 object-contain sticker-shadow select-none pointer-events-none"
+          className="w-24 h-24 object-contain sticker-shadow select-none pointer-events-none"
           draggable={false}
         />
       ) : (
@@ -184,12 +184,16 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
       {isHovered && !isDragging && (
         <>
           <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDelete(sticker.instanceId); }}
             className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-destructive-foreground opacity-80 hover:opacity-100 transition-opacity"
           >
             <X className="w-3 h-3" />
           </button>
           <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
             onClick={rotate}
             className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full bg-accent flex items-center justify-center text-accent-foreground opacity-80 hover:opacity-100 transition-opacity"
           >
