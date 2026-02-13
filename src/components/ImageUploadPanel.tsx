@@ -6,6 +6,35 @@ interface ImageUploadPanelProps {
   onAddImageSticker: (imageUrl: string) => void;
 }
 
+// Convert a blob/file to a data URL and optionally resize large images
+const toDataUrl = (source: Blob | File, maxSize = 800): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize if too large
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(source);
+  });
+};
+
 const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
   const [removeBg, setRemoveBg] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -16,7 +45,6 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) return;
 
     setIsProcessing(true);
@@ -27,24 +55,22 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
         const blob = await removeBackground(file, {
           output: { format: 'image/png' },
         });
-        const url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
-        onAddImageSticker(url);
+        const dataUrl = await toDataUrl(blob);
+        setPreviewUrl(dataUrl);
+        onAddImageSticker(dataUrl);
       } else {
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
-        onAddImageSticker(url);
+        const dataUrl = await toDataUrl(file);
+        setPreviewUrl(dataUrl);
+        onAddImageSticker(dataUrl);
       }
     } catch (err) {
       console.error('Image processing failed:', err);
-      // Fallback: use original image
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      onAddImageSticker(url);
+      const dataUrl = await toDataUrl(file);
+      setPreviewUrl(dataUrl);
+      onAddImageSticker(dataUrl);
     }
 
     setIsProcessing(false);
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
