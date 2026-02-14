@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import bgNotebook from '@/assets/notebook-bg.jpg';
 import bgRosesWood from '@/assets/bg-roses-wood.jpg';
 import bgRosePetals from '@/assets/bg-rose-petals.jpg';
@@ -14,6 +16,14 @@ import bgPinkRoses from '@/assets/bg-pink-roses.jpg';
 import bgFlowerLeaf from '@/assets/bg-flower-leaf.jpg';
 import bgBlossomNotebook from '@/assets/bg-blossom-notebook.jpg';
 import bgPensFlowers from '@/assets/bg-pens-flowers.jpg';
+import bgTornAutumn from '@/assets/bg-torn-autumn.jpg';
+import bgMeadowFrame from '@/assets/bg-meadow-frame.jpg';
+import bgRoadClip from '@/assets/bg-road-clip.jpg';
+import bgLaptopHeart from '@/assets/bg-laptop-heart.jpg';
+import bgAestheticDesk from '@/assets/bg-aesthetic-desk.jpg';
+import bgPhoneHand from '@/assets/bg-phone-hand.jpg';
+import bgLeafNotebook from '@/assets/bg-leaf-notebook.jpg';
+import bgCleanPaper from '@/assets/bg-clean-paper.jpg';
 
 export interface BackgroundOption {
   id: string;
@@ -38,6 +48,14 @@ export const backgrounds: BackgroundOption[] = [
   { id: 'flower-leaf', label: 'Daisy', src: bgFlowerLeaf },
   { id: 'blossom-notebook', label: 'Blossom', src: bgBlossomNotebook },
   { id: 'pens-flowers', label: 'Pens', src: bgPensFlowers },
+  { id: 'torn-autumn', label: 'Autumn', src: bgTornAutumn },
+  { id: 'meadow-frame', label: 'Meadow', src: bgMeadowFrame },
+  { id: 'road-clip', label: 'Road', src: bgRoadClip },
+  { id: 'laptop-heart', label: 'Laptop', src: bgLaptopHeart },
+  { id: 'aesthetic-desk', label: 'Desk', src: bgAestheticDesk },
+  { id: 'phone-hand', label: 'Phone', src: bgPhoneHand },
+  { id: 'leaf-notebook', label: 'Leaves', src: bgLeafNotebook },
+  { id: 'clean-paper', label: 'Clean', src: bgCleanPaper },
 ];
 
 interface BackgroundSelectorProps {
@@ -46,31 +64,56 @@ interface BackgroundSelectorProps {
 }
 
 const BackgroundSelector = ({ selected, onSelect }: BackgroundSelectorProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollBy({ left: dir === 'left' ? -120 : 120, behavior: 'smooth' });
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-handwriting-patrick text-muted-foreground tracking-wide uppercase">
         🖼️ Background
       </h3>
-      <div className="grid grid-cols-4 gap-1.5">
-        {backgrounds.map((bg) => (
-          <button
-            key={bg.id}
-            onClick={() => onSelect(bg.id)}
-            className={`relative w-full aspect-[3/4] rounded-md overflow-hidden border-2 transition-all ${
-              selected === bg.id
-                ? 'border-primary ring-1 ring-primary'
-                : 'border-border hover:border-muted-foreground/50'
-            }`}
-            title={bg.label}
-          >
-            <img
-              src={bg.src}
-              alt={bg.label}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          </button>
-        ))}
+      <div className="relative">
+        <button
+          onClick={() => scroll('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-card/80 backdrop-blur-sm rounded-full p-0.5 shadow hover:bg-card transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4 text-foreground" />
+        </button>
+        <div
+          ref={scrollRef}
+          className="flex gap-1.5 overflow-x-auto scrollbar-hide px-6 py-1"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {backgrounds.map((bg) => (
+            <button
+              key={bg.id}
+              onClick={() => onSelect(bg.id)}
+              className={`relative flex-shrink-0 w-12 h-16 rounded-md overflow-hidden border-2 transition-all ${
+                selected === bg.id
+                  ? 'border-primary ring-1 ring-primary'
+                  : 'border-border hover:border-muted-foreground/50'
+              }`}
+              title={bg.label}
+            >
+              <img
+                src={bg.src}
+                alt={bg.label}
+                className="w-full h-full object-cover"
+                draggable={false}
+              />
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => scroll('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-card/80 backdrop-blur-sm rounded-full p-0.5 shadow hover:bg-card transition-colors"
+        >
+          <ChevronRight className="w-4 h-4 text-foreground" />
+        </button>
       </div>
     </div>
   );
