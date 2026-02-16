@@ -9,16 +9,60 @@ import TextControls from './TextControls';
 import BackgroundSelector, { backgrounds } from './BackgroundSelector';
 import type { StickerItem, InkColor } from './StickerData';
 
-const NoteCanvas = () => {
-  const canvasRef = useRef<HTMLDivElement>(null);
+export interface NoteCanvasProps {
+  stickers?: PlacedSticker[];
+  onStickersChange?: (stickers: PlacedSticker[]) => void;
+  backgroundId?: string;
+  onBackgroundChange?: (id: string) => void;
+  externalCanvasRef?: React.RefObject<HTMLDivElement>;
+}
+
+const NoteCanvas = ({
+  stickers: controlledStickers,
+  onStickersChange,
+  backgroundId: controlledBgId,
+  onBackgroundChange,
+  externalCanvasRef,
+}: NoteCanvasProps = {}) => {
+  const internalCanvasRef = useRef<HTMLDivElement>(null);
+  const canvasRef = (externalCanvasRef || internalCanvasRef) as React.RefObject<HTMLDivElement>;
   const [inkColor, setInkColor] = useState<InkColor>('blue');
   const [fontFamily, setFontFamily] = useState('Caveat');
   const [fontSize, setFontSize] = useState(24);
-  const [stickers, setStickers] = useState<PlacedSticker[]>([]);
-  const [backgroundId, setBackgroundId] = useState('notebook');
+  const [internalStickers, setInternalStickers] = useState<PlacedSticker[]>([]);
+  const [internalBgId, setInternalBgId] = useState('notebook');
   const [isExporting, setIsExporting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+
+  const stickers = controlledStickers ?? internalStickers;
+  const backgroundId = controlledBgId ?? internalBgId;
+
+  const stickersRef = useRef(stickers);
+  stickersRef.current = stickers;
+
+  const setStickers = useCallback(
+    (updater: PlacedSticker[] | ((prev: PlacedSticker[]) => PlacedSticker[])) => {
+      const newValue = typeof updater === 'function' ? updater(stickersRef.current) : updater;
+      if (onStickersChange) {
+        onStickersChange(newValue);
+      } else {
+        setInternalStickers(newValue);
+      }
+    },
+    [onStickersChange]
+  );
+
+  const setBackgroundId = useCallback(
+    (id: string) => {
+      if (onBackgroundChange) {
+        onBackgroundChange(id);
+      } else {
+        setInternalBgId(id);
+      }
+    },
+    [onBackgroundChange]
+  );
 
   const inkCssMap: Record<InkColor, string> = {
     blue: 'hsl(215, 60%, 35%)',

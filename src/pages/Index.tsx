@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import NoteCanvas from '@/components/NoteCanvas';
+import SlideEditor from '@/components/SlideEditor';
 import { Sparkles } from 'lucide-react';
 
 const Index = () => {
@@ -24,7 +24,7 @@ const Index = () => {
 
       {/* Main */}
       <main className="flex-1 flex items-start justify-center pb-8">
-        <NoteCanvas />
+        <SlideEditor />
       </main>
 
       {/* Footer */}
