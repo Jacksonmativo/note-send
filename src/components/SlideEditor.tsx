@@ -15,6 +15,8 @@ interface SlideState {
 
 const MAX_SLIDES = 45; // 90s max / 2s per slide
 const SLIDE_DURATION_MS = 2000;
+const TRANSITION_MS = 500; // crossfade duration
+const TRANSITION_FRAMES = 30; // frames during transition at 60fps
 
 const SlideEditor = () => {
   const [slides, setSlides] = useState<SlideState[]>([
@@ -138,21 +140,45 @@ const SlideEditor = () => {
 
       recorder.start();
 
-      // Draw each slide for 2 seconds
+      // Helper to load an image
+      const loadImg = (src: string) =>
+        new Promise<HTMLImageElement>((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.src = src;
+        });
+
+      // Draw each slide with crossfade transitions
       for (let i = 0; i < images.length; i++) {
         setExportProgress(45 + Math.round((i / images.length) * 50));
 
-        await new Promise<void>((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve();
-          };
-          img.src = images[i];
-        });
+        const currentImg = await loadImg(images[i]);
 
-        await new Promise((r) => setTimeout(r, SLIDE_DURATION_MS));
+        // Draw the current slide fully
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+
+        // Hold the slide (minus transition time if there's a next slide)
+        const holdTime = i < images.length - 1 ? SLIDE_DURATION_MS - TRANSITION_MS : SLIDE_DURATION_MS;
+        await new Promise((r) => setTimeout(r, holdTime));
+
+        // Crossfade to next slide
+        if (i < images.length - 1) {
+          const nextImg = await loadImg(images[i + 1]);
+          const frameDelay = TRANSITION_MS / TRANSITION_FRAMES;
+
+          for (let f = 1; f <= TRANSITION_FRAMES; f++) {
+            const alpha = f / TRANSITION_FRAMES;
+            ctx.globalAlpha = 1;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+            await new Promise((r) => setTimeout(r, frameDelay));
+          }
+          ctx.globalAlpha = 1;
+        }
       }
 
       recorder.stop();
