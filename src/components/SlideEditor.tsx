@@ -114,17 +114,17 @@ const SlideEditor = () => {
       // Phase 2: Create video
       const canvas = document.createElement('canvas');
       canvas.width = 1080;
-      canvas.height = 1440;
+      canvas.height = 1920;
       const ctx = canvas.getContext('2d')!;
 
-      const stream = canvas.captureStream(30);
+      const stream = canvas.captureStream(60);
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
         ? 'video/webm;codecs=vp9'
         : 'video/webm';
 
       const recorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: 5_000_000,
+        videoBitsPerSecond: 10_000_000,
       });
 
       const chunks: Blob[] = [];
