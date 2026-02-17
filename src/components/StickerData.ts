@@ -68,4 +68,5 @@ export const FONT_OPTIONS = [
   { id: 'Patrick Hand', label: 'Patrick Hand', className: 'font-handwriting-patrick' },
   { id: 'Gloria Hallelujah', label: 'Gloria', className: 'font-handwriting-alt' },
   { id: 'Indie Flower', label: 'Indie', className: 'font-handwriting-indie' },
+  { id: 'Dancing Script', label: 'Dancing', className: 'font-handwriting-dancing' },
 ];

@@ -18,6 +18,7 @@ export default {
         'handwriting-alt': ['Gloria Hallelujah', 'cursive'],
         'handwriting-indie': ['Indie Flower', 'cursive'],
         'handwriting-patrick': ['Patrick Hand', 'cursive'],
+        'handwriting-dancing': ['Dancing Script', 'cursive'],
       },
       colors: {
         border: "hsl(var(--border))",

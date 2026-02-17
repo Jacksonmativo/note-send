@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Patrick+Hand&family=Gloria+Hallelujah&family=Indie+Flower&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Patrick+Hand&family=Gloria+Hallelujah&family=Indie+Flower&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -108,6 +108,9 @@
   }
   .font-handwriting-patrick {
     font-family: 'Patrick Hand', cursive;
+  }
+  .font-handwriting-dancing {
+    font-family: 'Dancing Script', cursive;
   }
   .paper-shadow {
     box-shadow: 
