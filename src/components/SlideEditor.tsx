@@ -13,8 +13,8 @@ interface SlideState {
   backgroundId: string;
 }
 
-const MAX_SLIDES = 45; // 90s max / 2s per slide
-const SLIDE_DURATION_MS = 2000;
+const MAX_SLIDES = 30; // 90s max / 3s per slide
+const SLIDE_DURATION_MS = 3000;
 const TRANSITION_MS = 500; // crossfade duration
 const TRANSITION_FRAMES = 30; // frames during transition at 60fps
 
