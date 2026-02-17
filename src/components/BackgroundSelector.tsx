@@ -24,6 +24,14 @@ import bgAestheticDesk from '@/assets/bg-aesthetic-desk.jpg';
 import bgPhoneHand from '@/assets/bg-phone-hand.jpg';
 import bgLeafNotebook from '@/assets/bg-leaf-notebook.jpg';
 import bgCleanPaper from '@/assets/bg-clean-paper.jpg';
+import bgBouquetRibbon from '@/assets/bg-bouquet-ribbon.jpg';
+import bgCraftClip from '@/assets/bg-craft-clip.jpg';
+import bgTornEdge from '@/assets/bg-torn-edge.jpg';
+import bgRippedWhite from '@/assets/bg-ripped-white.jpg';
+import bgBinderClip from '@/assets/bg-binder-clip.jpg';
+import bgPinnedPaper from '@/assets/bg-pinned-paper.jpg';
+import bgTapedTorn from '@/assets/bg-taped-torn.jpg';
+import bgDeskNotebook from '@/assets/bg-desk-notebook.jpg';
 
 export interface BackgroundOption {
   id: string;
@@ -56,6 +64,14 @@ export const backgrounds: BackgroundOption[] = [
   { id: 'phone-hand', label: 'Phone', src: bgPhoneHand },
   { id: 'leaf-notebook', label: 'Leaves', src: bgLeafNotebook },
   { id: 'clean-paper', label: 'Clean', src: bgCleanPaper },
+  { id: 'bouquet-ribbon', label: 'Bouquet', src: bgBouquetRibbon },
+  { id: 'craft-clip', label: 'Craft', src: bgCraftClip },
+  { id: 'torn-edge', label: 'Torn', src: bgTornEdge },
+  { id: 'ripped-white', label: 'Ripped', src: bgRippedWhite },
+  { id: 'binder-clip', label: 'Binder', src: bgBinderClip },
+  { id: 'pinned-paper', label: 'Pinned', src: bgPinnedPaper },
+  { id: 'taped-torn', label: 'Taped', src: bgTapedTorn },
+  { id: 'desk-notebook', label: 'Desk', src: bgDeskNotebook },
 ];
 
 interface BackgroundSelectorProps {
