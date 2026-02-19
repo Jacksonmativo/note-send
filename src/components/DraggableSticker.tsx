@@ -225,8 +225,8 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
             className="absolute -bottom-3 -left-3 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-md cursor-nwse-resize active:scale-90 transition-transform"
             title="Drag to resize"
           >
-            <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M1 9L9 1M4 9L9 4M7 9L9 7" />
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 7H13M1 7L4 4M1 7L4 10M13 7L10 4M13 7L10 10" />
             </svg>
           </div>
         </>
