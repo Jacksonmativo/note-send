@@ -25,8 +25,10 @@ interface DraggableStickerProps {
 
 const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: DraggableStickerProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, stickerX: 0, stickerY: 0 });
+  const stickerRef = useRef(sticker);
+  stickerRef.current = sticker;
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -141,25 +143,43 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
     window.addEventListener('touchend', handleTouchEnd);
   }, [sticker, onUpdate]);
 
+  // Deselect when clicking outside
+  const handleClickOutside = useCallback((e: MouseEvent | TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest(`[data-sticker-id="${sticker.instanceId}"]`)) {
+      setIsSelected(false);
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('touchstart', handleClickOutside);
+    }
+  }, [sticker.instanceId]);
+
+  const handleSelect = useCallback(() => {
+    setIsSelected(true);
+    window.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('touchstart', handleClickOutside);
+  }, [handleClickOutside]);
+
+  const showControls = isSelected && !isDragging;
+
   return (
     <div
+      data-sticker-id={sticker.instanceId}
       className="absolute select-none group"
       style={{
         left: sticker.x,
         top: sticker.y,
         transform: `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
         cursor: isDragging ? 'grabbing' : 'grab',
-        zIndex: isDragging ? 50 : 10,
+        zIndex: isDragging ? 50 : isSelected ? 20 : 10,
         touchAction: 'none',
       }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onClick={handleSelect}
     >
       {sticker.textContent !== undefined ? (
         <div
-          className="min-w-[60px] max-w-[220px] px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words"
+          className="min-w-[60px] max-w-[220px] px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words flex items-center justify-center text-center"
           style={{
             fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
             fontSize: `${sticker.textSize || 24}px`,
@@ -181,31 +201,31 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
           {sticker.emoji}
         </span>
       )}
-      {isHovered && !isDragging && (
+      {showControls && (
         <>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onDelete(sticker.instanceId); }}
-            className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-destructive flex items-center justify-center text-destructive-foreground opacity-80 hover:opacity-100 transition-opacity"
+            className="absolute -top-3 -right-3 w-7 h-7 rounded-full bg-destructive flex items-center justify-center text-destructive-foreground shadow-md active:scale-90 transition-transform"
           >
-            <X className="w-3 h-3" />
+            <X className="w-4 h-4" />
           </button>
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={rotate}
-            className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full bg-accent flex items-center justify-center text-accent-foreground opacity-80 hover:opacity-100 transition-opacity"
+            className="absolute -bottom-3 -right-3 w-7 h-7 rounded-full bg-accent flex items-center justify-center text-accent-foreground shadow-md active:scale-90 transition-transform"
           >
-            <RotateCw className="w-3 h-3" />
+            <RotateCw className="w-4 h-4" />
           </button>
           <div
             onMouseDown={handleResizeMouseDown}
             onTouchStart={handleResizeTouchStart}
-            className="absolute -bottom-2 -left-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center text-primary-foreground opacity-80 hover:opacity-100 transition-opacity cursor-nwse-resize"
+            className="absolute -bottom-3 -left-3 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-md cursor-nwse-resize active:scale-90 transition-transform"
             title="Drag to resize"
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M1 9L9 1M4 9L9 4M7 9L9 7" />
             </svg>
           </div>
