@@ -41,16 +41,19 @@ const NoteCanvas = ({
   const stickersRef = useRef(stickers);
   stickersRef.current = stickers;
 
+  const onStickersChangeRef = useRef(onStickersChange);
+  onStickersChangeRef.current = onStickersChange;
+
   const setStickers = useCallback(
     (updater: PlacedSticker[] | ((prev: PlacedSticker[]) => PlacedSticker[])) => {
       const newValue = typeof updater === 'function' ? updater(stickersRef.current) : updater;
-      if (onStickersChange) {
-        onStickersChange(newValue);
+      if (onStickersChangeRef.current) {
+        onStickersChangeRef.current(newValue);
       } else {
         setInternalStickers(newValue);
       }
     },
-    [onStickersChange]
+    []
   );
 
   const setBackgroundId = useCallback(
