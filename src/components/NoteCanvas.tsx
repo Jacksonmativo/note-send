@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { toPng } from 'html-to-image';
 import { Download, RotateCcw, Sparkles, Type, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -8,6 +8,7 @@ import ImageUploadPanel from './ImageUploadPanel';
 import TextControls from './TextControls';
 import BackgroundSelector, { backgrounds } from './BackgroundSelector';
 import DrawingCanvas from './DrawingCanvas';
+import PhotoEffectsPanel from './PhotoEffectsPanel';
 import type { StickerItem, InkColor } from './StickerData';
 
 export interface NoteCanvasProps {
@@ -36,6 +37,7 @@ const NoteCanvas = ({
   const [isDrawing, setIsDrawing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [effectsTarget, setEffectsTarget] = useState<PlacedSticker | null>(null);
 
   const stickers = controlledStickers ?? internalStickers;
   const backgroundId = controlledBgId ?? internalBgId;
@@ -143,6 +145,7 @@ const NoteCanvas = ({
         y: randomY,
         rotation: randomTilt,
         scale: 1,
+        layer: 'image' as const,
       },
     ]);
   }, []);
@@ -289,13 +292,21 @@ const NoteCanvas = ({
           }}
           onClick={() => { if (editingId) commitEdit(); }}
         >
-          {/* Stickers & Text Boxes */}
-          {stickers.map((sticker) => (
+          {/* Layer-based rendering: images → stickers → text */}
+          {[...stickers]
+            .sort((a, b) => {
+              const layerOrder = { image: 0, sticker: 1, text: 2 };
+              const aLayer = a.textContent !== undefined ? 'text' : (a.layer || (a.imageUrl ? 'image' : 'sticker'));
+              const bLayer = b.textContent !== undefined ? 'text' : (b.layer || (b.imageUrl ? 'image' : 'sticker'));
+              return (layerOrder[aLayer] || 0) - (layerOrder[bLayer] || 0);
+            })
+            .map((sticker) => (
             <div key={sticker.instanceId} onDoubleClick={() => handleStickerClick(sticker)}>
               <DraggableSticker
                 sticker={sticker}
                 onUpdate={updateSticker}
                 onDelete={deleteSticker}
+                onEffects={sticker.imageUrl ? (s) => setEffectsTarget(s) : undefined}
                 containerRef={canvasRef}
               />
             </div>
@@ -347,6 +358,18 @@ const NoteCanvas = ({
             setIsDrawing(false);
           }}
           onClose={() => setIsDrawing(false)}
+        />
+      )}
+
+      {/* Photo Effects Modal */}
+      {effectsTarget && (
+        <PhotoEffectsPanel
+          sticker={effectsTarget}
+          onUpdate={(updated) => {
+            updateSticker(updated);
+            setEffectsTarget(updated);
+          }}
+          onClose={() => setEffectsTarget(null)}
         />
       )}
     </div>
