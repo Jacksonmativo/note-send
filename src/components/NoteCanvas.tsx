@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, RotateCcw, Sparkles, Type } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Type, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
 import StickerPanel from './StickerPanel';
 import ImageUploadPanel from './ImageUploadPanel';
 import TextControls from './TextControls';
 import BackgroundSelector, { backgrounds } from './BackgroundSelector';
+import DrawingCanvas from './DrawingCanvas';
 import type { StickerItem, InkColor } from './StickerData';
 
 export interface NoteCanvasProps {
@@ -32,6 +33,7 @@ const NoteCanvas = ({
   const [internalStickers, setInternalStickers] = useState<PlacedSticker[]>([]);
   const [internalBgId, setInternalBgId] = useState('notebook');
   const [isExporting, setIsExporting] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
 
@@ -242,6 +244,15 @@ const NoteCanvas = ({
         <div className="border-t border-border" />
         <ImageUploadPanel onAddImageSticker={addImageSticker} />
         <div className="border-t border-border" />
+        {/* Draw Sticker Button */}
+        <button
+          onClick={() => setIsDrawing(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+        >
+          <Pencil className="w-4 h-4" />
+          Draw a Sticker
+        </button>
+        <div className="border-t border-border" />
         <div className="flex flex-col gap-2">
           <button
             onClick={handleExport}
@@ -327,6 +338,17 @@ const NoteCanvas = ({
           })()}
         </div>
       </motion.div>
+
+      {/* Drawing Canvas Modal */}
+      {isDrawing && (
+        <DrawingCanvas
+          onSave={(dataUrl) => {
+            addImageSticker(dataUrl);
+            setIsDrawing(false);
+          }}
+          onClose={() => setIsDrawing(false)}
+        />
+      )}
     </div>
   );
 };
