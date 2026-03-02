@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, RotateCw } from 'lucide-react';
+import { X, RotateCw, Sparkles } from 'lucide-react';
+
+export type StickerLayer = 'image' | 'sticker' | 'text';
 
 export interface PlacedSticker {
   instanceId: string;
@@ -14,16 +16,21 @@ export interface PlacedSticker {
   y: number;
   rotation: number;
   scale: number;
+  photoFrame?: string;
+  photoFilter?: string;
+  photoEffect?: string;
+  layer?: StickerLayer;
 }
 
 interface DraggableStickerProps {
   sticker: PlacedSticker;
   onUpdate: (updated: PlacedSticker) => void;
   onDelete: (instanceId: string) => void;
+  onEffects?: (sticker: PlacedSticker) => void;
   containerRef: React.RefObject<HTMLDivElement>;
 }
 
-const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: DraggableStickerProps) => {
+const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef }: DraggableStickerProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, stickerX: 0, stickerY: 0 });
@@ -190,12 +197,18 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
           {sticker.textContent || 'Double-click to edit'}
         </div>
       ) : sticker.imageUrl ? (
-        <img
-          src={sticker.imageUrl}
-          alt="sticker"
-          className="w-24 h-24 object-contain sticker-shadow select-none pointer-events-none"
-          draggable={false}
-        />
+        <div className={`relative photo-frame-${sticker.photoFrame || 'none'}`}>
+          <img
+            src={sticker.imageUrl}
+            alt="sticker"
+            className="w-24 h-24 object-contain sticker-shadow select-none pointer-events-none"
+            style={{ filter: sticker.photoFilter || 'none' }}
+            draggable={false}
+          />
+          {sticker.photoEffect && sticker.photoEffect !== 'none' && (
+            <div className={`absolute inset-0 pointer-events-none photo-effect-${sticker.photoEffect}`} />
+          )}
+        </div>
       ) : (
         <span className="text-4xl sticker-shadow select-none pointer-events-none">
           {sticker.emoji}
@@ -211,6 +224,16 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, containerRef }: Draggab
           >
             <X className="w-4 h-4" />
           </button>
+          {sticker.imageUrl && onEffects && (
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onEffects(sticker); }}
+              className="absolute -top-3 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-card flex items-center justify-center text-foreground shadow-md active:scale-90 transition-transform border border-border"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
