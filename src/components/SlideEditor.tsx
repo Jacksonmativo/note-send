@@ -148,11 +148,29 @@ const SlideEditor = () => {
           img.src = src;
         });
 
-      // Draw each slide with crossfade transitions
-      for (let i = 0; i < images.length; i++) {
-        setExportProgress(45 + Math.round((i / images.length) * 50));
+      // Helper: wait using requestAnimationFrame for proper stream sync
+      const waitFrames = (ms: number) =>
+        new Promise<void>((resolve) => {
+          const start = performance.now();
+          const tick = () => {
+            ctx.getImageData(0, 0, 1, 1); // force flush
+            if (performance.now() - start >= ms) {
+              resolve();
+            } else {
+              requestAnimationFrame(tick);
+            }
+          };
+          requestAnimationFrame(tick);
+        });
 
-        const currentImg = await loadImg(images[i]);
+      // Pre-load all images
+      const loadedImages = await Promise.all(images.map(loadImg));
+
+      // Draw each slide with crossfade transitions
+      for (let i = 0; i < loadedImages.length; i++) {
+        setExportProgress(45 + Math.round((i / loadedImages.length) * 50));
+
+        const currentImg = loadedImages[i];
 
         // Draw the current slide fully
         ctx.globalAlpha = 1;
@@ -160,24 +178,34 @@ const SlideEditor = () => {
         ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
 
         // Hold the slide (minus transition time if there's a next slide)
-        const holdTime = i < images.length - 1 ? SLIDE_DURATION_MS - TRANSITION_MS : SLIDE_DURATION_MS;
-        await new Promise((r) => setTimeout(r, holdTime));
+        const holdTime = i < loadedImages.length - 1 ? SLIDE_DURATION_MS - TRANSITION_MS : SLIDE_DURATION_MS;
+        await waitFrames(holdTime);
 
         // Crossfade to next slide
-        if (i < images.length - 1) {
-          const nextImg = await loadImg(images[i + 1]);
-          const frameDelay = TRANSITION_MS / TRANSITION_FRAMES;
+        if (i < loadedImages.length - 1) {
+          const nextImg = loadedImages[i + 1];
+          const transitionStart = performance.now();
 
-          for (let f = 1; f <= TRANSITION_FRAMES; f++) {
-            const alpha = f / TRANSITION_FRAMES;
-            ctx.globalAlpha = 1;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = alpha;
-            ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
-            await new Promise((r) => setTimeout(r, frameDelay));
-          }
-          ctx.globalAlpha = 1;
+          await new Promise<void>((resolve) => {
+            const animateTransition = () => {
+              const elapsed = performance.now() - transitionStart;
+              const progress = Math.min(elapsed / TRANSITION_MS, 1);
+
+              ctx.globalAlpha = 1;
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+              ctx.globalAlpha = progress;
+              ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+
+              if (progress < 1) {
+                requestAnimationFrame(animateTransition);
+              } else {
+                ctx.globalAlpha = 1;
+                resolve();
+              }
+            };
+            requestAnimationFrame(animateTransition);
+          });
         }
       }
 
