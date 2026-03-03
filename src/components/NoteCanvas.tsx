@@ -220,15 +220,15 @@ const NoteCanvas = ({
     <div className="flex flex-col lg:flex-row gap-6 w-full max-w-5xl mx-auto p-4">
       {/* Side Panel */}
       <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="lg:w-56 w-full flex flex-col gap-4 bg-card rounded-xl p-4 paper-shadow"
+        className="w-full lg:w-56 flex flex-row lg:flex-col gap-2 lg:gap-4 bg-card rounded-xl p-3 lg:p-4 paper-shadow overflow-x-auto flex-shrink-0"
       >
         {/* Text Controls Popover */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
               <Type className="w-4 h-4" />
               Text & Fonts
             </button>
@@ -255,7 +255,7 @@ const NoteCanvas = ({
         {/* Background Popover */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
               <Palette className="w-4 h-4" />
               Backgrounds
             </button>
@@ -268,7 +268,7 @@ const NoteCanvas = ({
         {/* Stickers Popover */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
               <SmilePlus className="w-4 h-4" />
               Stickers
             </button>
@@ -281,7 +281,7 @@ const NoteCanvas = ({
         {/* Image Upload Popover */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
               <ImageIcon className="w-4 h-4" />
               Upload Photo
             </button>
@@ -293,26 +293,28 @@ const NoteCanvas = ({
         {/* Draw Sticker Button */}
         <button
           onClick={() => setIsDrawing(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full"
+          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full"
         >
           <Pencil className="w-4 h-4" />
           Draw a Sticker
         </button>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-row lg:flex-col gap-2">
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
           >
             <Download className="w-4 h-4" />
-            {isExporting ? 'Saving...' : 'Download Image'}
+            <span className="hidden lg:inline">{isExporting ? 'Saving...' : 'Download'}</span>
+            <span className="lg:hidden">{isExporting ? '...' : 'Save'}</span>
           </button>
           <button
             onClick={handleReset}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-secondary text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors whitespace-nowrap"
           >
             <RotateCcw className="w-4 h-4" />
-            Start Over
+            <span className="hidden lg:inline">Start Over</span>
+            <span className="lg:hidden">Reset</span>
           </button>
         </div>
       </motion.div>
