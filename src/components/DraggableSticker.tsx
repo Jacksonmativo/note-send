@@ -210,7 +210,14 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
           )}
         </div>
       ) : (
-        <span className="text-4xl sticker-shadow select-none pointer-events-none">
+        <span
+          className="text-4xl select-none pointer-events-none"
+          style={{
+            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.18))',
+            WebkitTextStroke: '3px white',
+            paintOrder: 'stroke fill',
+          }}
+        >
           {sticker.emoji}
         </span>
       )}
