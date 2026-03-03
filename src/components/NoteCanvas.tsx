@@ -233,7 +233,7 @@ const NoteCanvas = ({
               Text & Fonts
             </button>
           </PopoverTrigger>
-          <PopoverContent side="right" align="start" className="w-64 p-3">
+          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
             <TextControls
               inkColor={inkColor}
               fontFamily={fontFamily}
@@ -260,7 +260,7 @@ const NoteCanvas = ({
               Backgrounds
             </button>
           </PopoverTrigger>
-          <PopoverContent side="right" align="start" className="w-72 p-3">
+          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-72 p-3 lg:w-72" sideOffset={8}>
             <BackgroundSelector selected={backgroundId} onSelect={setBackgroundId} />
           </PopoverContent>
         </Popover>
@@ -273,7 +273,7 @@ const NoteCanvas = ({
               Stickers
             </button>
           </PopoverTrigger>
-          <PopoverContent side="right" align="start" className="w-64 p-3">
+          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
             <StickerPanel onAddSticker={addSticker} />
           </PopoverContent>
         </Popover>
@@ -286,7 +286,7 @@ const NoteCanvas = ({
               Upload Photo
             </button>
           </PopoverTrigger>
-          <PopoverContent side="right" align="start" className="w-64 p-3">
+          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
             <ImageUploadPanel onAddImageSticker={addImageSticker} />
           </PopoverContent>
         </Popover>
