@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, RotateCcw, Sparkles, Type, Pencil } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Type, Pencil, Palette, ImageIcon, SmilePlus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
 import StickerPanel from './StickerPanel';
 import ImageUploadPanel from './ImageUploadPanel';
@@ -224,38 +225,79 @@ const NoteCanvas = ({
         transition={{ duration: 0.4 }}
         className="lg:w-56 w-full flex flex-col gap-4 bg-card rounded-xl p-4 paper-shadow"
       >
-        <TextControls
-          inkColor={inkColor}
-          fontFamily={fontFamily}
-          fontSize={fontSize}
-          onInkChange={setInkColor}
-          onFontChange={setFontFamily}
-          onSizeChange={setFontSize}
-        />
-        {/* Add Text Button */}
-        <button
-          onClick={addTextBox}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
-        >
-          <Type className="w-4 h-4" />
-          Add Text Box
-        </button>
-        <div className="border-t border-border" />
-        <BackgroundSelector selected={backgroundId} onSelect={setBackgroundId} />
-        <div className="border-t border-border" />
-        <StickerPanel onAddSticker={addSticker} />
-        <div className="border-t border-border" />
-        <ImageUploadPanel onAddImageSticker={addImageSticker} />
-        <div className="border-t border-border" />
+        {/* Text Controls Popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+              <Type className="w-4 h-4" />
+              Text & Fonts
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-64 p-3">
+            <TextControls
+              inkColor={inkColor}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              onInkChange={setInkColor}
+              onFontChange={setFontFamily}
+              onSizeChange={setFontSize}
+            />
+            <button
+              onClick={addTextBox}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full mt-3"
+            >
+              <Type className="w-4 h-4" />
+              Add Text Box
+            </button>
+          </PopoverContent>
+        </Popover>
+
+        {/* Background Popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+              <Palette className="w-4 h-4" />
+              Backgrounds
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-72 p-3">
+            <BackgroundSelector selected={backgroundId} onSelect={setBackgroundId} />
+          </PopoverContent>
+        </Popover>
+
+        {/* Stickers Popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+              <SmilePlus className="w-4 h-4" />
+              Stickers
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-64 p-3">
+            <StickerPanel onAddSticker={addSticker} />
+          </PopoverContent>
+        </Popover>
+
+        {/* Image Upload Popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full">
+              <ImageIcon className="w-4 h-4" />
+              Upload Photo
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-64 p-3">
+            <ImageUploadPanel onAddImageSticker={addImageSticker} />
+          </PopoverContent>
+        </Popover>
         {/* Draw Sticker Button */}
         <button
           onClick={() => setIsDrawing(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full"
         >
           <Pencil className="w-4 h-4" />
           Draw a Sticker
         </button>
-        <div className="border-t border-border" />
         <div className="flex flex-col gap-2">
           <button
             onClick={handleExport}
