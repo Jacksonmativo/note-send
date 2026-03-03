@@ -332,7 +332,7 @@ const SlideEditor = () => {
         {/* Controls row */}
         <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
           <p className="text-xs text-muted-foreground font-handwriting-patrick">
-            Slide {currentIndex + 1}/{slides.length} · {slides.length * 2}s / 90s max
+            Slide {currentIndex + 1}/{slides.length} · {slides.length * 3}s / 90s max
           </p>
 
           <div className="flex items-center gap-2">
