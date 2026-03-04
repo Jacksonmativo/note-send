@@ -1,8 +1,17 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import SlideEditor from '@/components/SlideEditor';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Copy, Check } from 'lucide-react';
 
 const Index = () => {
+  const [copied, setCopied] = useState(false);
+
+  const copyNumber = () => {
+    navigator.clipboard.writeText('0702188406');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
@@ -29,7 +38,18 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="text-center py-3 text-xs text-muted-foreground font-handwriting-patrick">
-        <p>Buy me coffee ☕ M-Pesa: 0702188406 — Jackson Mativo</p>
+        <p>
+          Buy me coffee ☕ M-Pesa:{' '}
+          <button
+            onClick={copyNumber}
+            className="inline-flex items-center gap-1 font-bold text-foreground hover:text-primary transition-colors cursor-pointer"
+            title="Click to copy"
+          >
+            0702188406
+            {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+          </button>
+          {' '}— Jackson Mativo
+        </p>
       </footer>
     </div>
   );
