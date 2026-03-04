@@ -166,6 +166,11 @@ const SlideEditor = () => {
       // Pre-load all images
       const loadedImages = await Promise.all(images.map(loadImg));
 
+      // Prime the recorder with first frame to avoid initial delay
+      ctx.globalAlpha = 1;
+      ctx.drawImage(loadedImages[0], 0, 0, canvas.width, canvas.height);
+      await waitFrames(50);
+
       // Draw each slide with crossfade transitions
       for (let i = 0; i < loadedImages.length; i++) {
         setExportProgress(45 + Math.round((i / loadedImages.length) * 50));

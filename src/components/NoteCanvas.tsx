@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { toPng } from 'html-to-image';
-import { Download, RotateCcw, Sparkles, Type, Pencil, Palette, ImageIcon, SmilePlus } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Type, Pencil, Palette, ImageIcon, SmilePlus, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
@@ -88,19 +88,19 @@ const NoteCanvas = ({
       {
         instanceId: id,
         stickerId: 'text-box',
-        textContent: 'Your text here',
+        textContent: '',
         textFont: fontFamily,
         textColor: inkCssMap[inkColor],
         textSize: fontSize,
+        textAlign: 'center' as const,
         x: randomX,
         y: randomY,
         rotation: randomTilt,
         scale: 1,
       },
     ]);
-    // Immediately open edit for the new textbox
     setEditingId(id);
-    setEditText('Your text here');
+    setEditText('');
   }, [fontFamily, fontSize, inkColor, inkCssMap]);
 
   const addSticker = useCallback((item: StickerItem) => {
@@ -360,15 +360,38 @@ const NoteCanvas = ({
           {editingId && (() => {
             const s = stickers.find((st) => st.instanceId === editingId);
             if (!s) return null;
+            const currentAlign = s.textAlign || 'center';
             return (
               <div
                 className="absolute z-[100]"
                 style={{ left: s.x, top: s.y, transform: `rotate(${s.rotation}deg) scale(${s.scale})` }}
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Alignment toolbar */}
+                <div className="flex gap-1 mb-1">
+                  {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => (
+                    <button
+                      key={align}
+                      onClick={() => {
+                        setStickers((prev) =>
+                          prev.map((st) => st.instanceId === editingId ? { ...st, textAlign: align } : st)
+                        );
+                        if (align === 'center') {
+                          setEditText((prev) => prev + '\n');
+                        }
+                      }}
+                      className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                        currentAlign === align ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                    </button>
+                  ))}
+                </div>
                 <textarea
                   autoFocus
                   value={editText}
+                  placeholder="Your text here"
                   onChange={(e) => {
                     if (e.target.value.length <= 300) setEditText(e.target.value);
                   }}
@@ -376,12 +399,13 @@ const NoteCanvas = ({
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); }
                     if (e.key === 'Escape') commitEdit();
                   }}
-                  className="min-w-[120px] max-w-[220px] min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize"
+                  className="min-w-[120px] max-w-[220px] min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize placeholder:text-muted-foreground/50"
                   style={{
                     fontFamily: `'${s.textFont || 'Caveat'}', cursive`,
                     fontSize: `${s.textSize || 24}px`,
                     color: s.textColor || 'hsl(215, 60%, 35%)',
                     lineHeight: '1.4',
+                    textAlign: currentAlign,
                   }}
                   maxLength={300}
                 />
