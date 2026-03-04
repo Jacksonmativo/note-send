@@ -2,7 +2,7 @@ export interface StickerItem {
   id: string;
   label: string;
   emoji: string;
-  category: 'hearts' | 'flowers' | 'faces' | 'tape' | 'doodles' | 'stars';
+  category: 'hearts' | 'flowers' | 'faces' | 'tape' | 'doodles' | 'stars' | 'food' | 'animals' | 'weather' | 'travel';
 }
 
 export const STICKERS: StickerItem[] = [
@@ -45,12 +45,72 @@ export const STICKERS: StickerItem[] = [
   { id: 'star-fire', label: 'Fire', emoji: '🔥', category: 'stars' },
   { id: 'star-rainbow', label: 'Rainbow', emoji: '🌈', category: 'stars' },
   { id: 'star-butterfly', label: 'Butterfly', emoji: '🦋', category: 'stars' },
+
+  // Food & Drinks
+  { id: 'food-coffee', label: 'Coffee', emoji: '☕', category: 'food' },
+  { id: 'food-cake', label: 'Cake', emoji: '🍰', category: 'food' },
+  { id: 'food-donut', label: 'Donut', emoji: '🍩', category: 'food' },
+  { id: 'food-cookie', label: 'Cookie', emoji: '🍪', category: 'food' },
+  { id: 'food-icecream', label: 'Ice Cream', emoji: '🍦', category: 'food' },
+  { id: 'food-cupcake', label: 'Cupcake', emoji: '🧁', category: 'food' },
+  { id: 'food-chocolate', label: 'Chocolate', emoji: '🍫', category: 'food' },
+  { id: 'food-strawberry', label: 'Strawberry', emoji: '🍓', category: 'food' },
+  { id: 'food-cherry', label: 'Cherries', emoji: '🍒', category: 'food' },
+  { id: 'food-wine', label: 'Wine', emoji: '🍷', category: 'food' },
+  { id: 'food-bubble-tea', label: 'Bubble Tea', emoji: '🧋', category: 'food' },
+  { id: 'food-pizza', label: 'Pizza', emoji: '🍕', category: 'food' },
+
+  // Animals
+  { id: 'animal-cat', label: 'Cat', emoji: '🐱', category: 'animals' },
+  { id: 'animal-dog', label: 'Dog', emoji: '🐶', category: 'animals' },
+  { id: 'animal-bunny', label: 'Bunny', emoji: '🐰', category: 'animals' },
+  { id: 'animal-bear', label: 'Bear', emoji: '🐻', category: 'animals' },
+  { id: 'animal-panda', label: 'Panda', emoji: '🐼', category: 'animals' },
+  { id: 'animal-fox', label: 'Fox', emoji: '🦊', category: 'animals' },
+  { id: 'animal-unicorn', label: 'Unicorn', emoji: '🦄', category: 'animals' },
+  { id: 'animal-dove', label: 'Dove', emoji: '🕊️', category: 'animals' },
+  { id: 'animal-ladybug', label: 'Ladybug', emoji: '🐞', category: 'animals' },
+  { id: 'animal-bee', label: 'Bee', emoji: '🐝', category: 'animals' },
+  { id: 'animal-whale', label: 'Whale', emoji: '🐳', category: 'animals' },
+  { id: 'animal-chick', label: 'Chick', emoji: '🐥', category: 'animals' },
+
+  // Weather & Nature
+  { id: 'weather-sun', label: 'Sun', emoji: '☀️', category: 'weather' },
+  { id: 'weather-moon', label: 'Moon', emoji: '🌙', category: 'weather' },
+  { id: 'weather-cloud', label: 'Cloud', emoji: '☁️', category: 'weather' },
+  { id: 'weather-snowflake', label: 'Snowflake', emoji: '❄️', category: 'weather' },
+  { id: 'weather-raindrop', label: 'Raindrop', emoji: '💧', category: 'weather' },
+  { id: 'weather-thunder', label: 'Thunder', emoji: '⚡', category: 'weather' },
+  { id: 'weather-leaf', label: 'Leaf', emoji: '🍃', category: 'weather' },
+  { id: 'weather-maple', label: 'Maple', emoji: '🍁', category: 'weather' },
+  { id: 'weather-clover', label: 'Clover', emoji: '🍀', category: 'weather' },
+  { id: 'weather-mushroom', label: 'Mushroom', emoji: '🍄', category: 'weather' },
+  { id: 'weather-star-night', label: 'Night Sky', emoji: '🌃', category: 'weather' },
+  { id: 'weather-sunset', label: 'Sunset', emoji: '🌅', category: 'weather' },
+
+  // Travel & Objects
+  { id: 'travel-camera', label: 'Camera', emoji: '📷', category: 'travel' },
+  { id: 'travel-plane', label: 'Plane', emoji: '✈️', category: 'travel' },
+  { id: 'travel-globe', label: 'Globe', emoji: '🌍', category: 'travel' },
+  { id: 'travel-compass', label: 'Compass', emoji: '🧭', category: 'travel' },
+  { id: 'travel-tent', label: 'Tent', emoji: '⛺', category: 'travel' },
+  { id: 'travel-mountain', label: 'Mountain', emoji: '🏔️', category: 'travel' },
+  { id: 'travel-palm', label: 'Palm Tree', emoji: '🌴', category: 'travel' },
+  { id: 'travel-shell', label: 'Shell', emoji: '🐚', category: 'travel' },
+  { id: 'travel-balloon', label: 'Balloon', emoji: '🎈', category: 'travel' },
+  { id: 'travel-gift', label: 'Gift', emoji: '🎁', category: 'travel' },
+  { id: 'travel-key', label: 'Key', emoji: '🔑', category: 'travel' },
+  { id: 'travel-gem', label: 'Gem', emoji: '💎', category: 'travel' },
 ];
 
 export const STICKER_CATEGORIES = [
   { id: 'hearts', label: '❤️ Hearts' },
   { id: 'flowers', label: '🌸 Flowers' },
   { id: 'faces', label: '😊 Faces' },
+  { id: 'food', label: '☕ Food' },
+  { id: 'animals', label: '🐱 Animals' },
+  { id: 'weather', label: '☀️ Nature' },
+  { id: 'travel', label: '✈️ Travel' },
   { id: 'tape', label: '📌 Deco' },
   { id: 'stars', label: '✨ Stars' },
 ] as const;
