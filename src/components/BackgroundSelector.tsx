@@ -32,6 +32,14 @@ import bgBinderClip from '@/assets/bg-binder-clip.jpg';
 import bgPinnedPaper from '@/assets/bg-pinned-paper.jpg';
 import bgTapedTorn from '@/assets/bg-taped-torn.jpg';
 import bgDeskNotebook from '@/assets/bg-desk-notebook.jpg';
+import bgBlossomPen from '@/assets/bg-blossom-pen.jpg';
+import bgTornCork from '@/assets/bg-torn-cork.jpg';
+import bgHeartTape from '@/assets/bg-heart-tape.jpg';
+import bgCozyKnit from '@/assets/bg-cozy-knit.jpg';
+import bgSilkCoffee from '@/assets/bg-silk-coffee.jpg';
+import bgPeachNotebook from '@/assets/bg-peach-notebook.jpg';
+import bgInstaFrame from '@/assets/bg-insta-frame.jpg';
+import bgBrickVines from '@/assets/bg-brick-vines.jpg';
 
 export interface BackgroundOption {
   id: string;
@@ -72,6 +80,14 @@ export const backgrounds: BackgroundOption[] = [
   { id: 'pinned-paper', label: 'Pinned', src: bgPinnedPaper },
   { id: 'taped-torn', label: 'Taped', src: bgTapedTorn },
   { id: 'desk-notebook', label: 'Desk', src: bgDeskNotebook },
+  { id: 'blossom-pen', label: 'Blossom Pen', src: bgBlossomPen },
+  { id: 'torn-cork', label: 'Cork Board', src: bgTornCork },
+  { id: 'heart-tape', label: 'Heart Tape', src: bgHeartTape },
+  { id: 'cozy-knit', label: 'Cozy Knit', src: bgCozyKnit },
+  { id: 'silk-coffee', label: 'Silk Coffee', src: bgSilkCoffee },
+  { id: 'peach-notebook', label: 'Peach', src: bgPeachNotebook },
+  { id: 'insta-frame', label: 'Insta', src: bgInstaFrame },
+  { id: 'brick-vines', label: 'Brick Vines', src: bgBrickVines },
 ];
 
 interface BackgroundSelectorProps {
