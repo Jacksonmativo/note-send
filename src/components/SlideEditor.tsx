@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
-import { Plus, Trash2, Film, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Film, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { motion } from 'framer-motion';
 import NoteCanvas from './NoteCanvas';
 import { backgrounds } from './BackgroundSelector';
 import { Progress } from './ui/progress';
+import AudioTrimmer from './AudioTrimmer';
 import type { PlacedSticker } from './DraggableSticker';
 
 interface SlideState {
@@ -25,6 +26,7 @@ const SlideEditor = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isExportingVideo, setIsExportingVideo] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [audioData, setAudioData] = useState<{ buffer: AudioBuffer; startTime: number; endTime: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,26 @@ const SlideEditor = () => {
     if (index >= 0 && index < slides.length) setCurrentIndex(index);
   };
 
+  // HD PNG download of current slide
+  const downloadHD = async () => {
+    if (!canvasRef.current) return;
+    try {
+      const dataUrl = await toPng(canvasRef.current, {
+        quality: 1,
+        pixelRatio: 4, // Higher pixel ratio for HD 1080x1920
+        cacheBust: true,
+      });
+      const link = document.createElement('a');
+      link.download = `slide-${currentIndex + 1}-HD-${Date.now()}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('HD download failed:', err);
+    }
+  };
+
   // Video export using Canvas + MediaRecorder
   const exportVideo = async () => {
     if (!canvasRef.current || slides.length < 2) return;
@@ -120,6 +142,19 @@ const SlideEditor = () => {
       const ctx = canvas.getContext('2d')!;
 
       const stream = canvas.captureStream(60);
+
+      // Mix audio into stream if available
+      if (audioData) {
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioData.buffer;
+        const dest = audioCtx.createMediaStreamDestination();
+        source.connect(dest);
+        dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+        const audioDuration = audioData.endTime - audioData.startTime;
+        source.start(0, audioData.startTime, audioDuration);
+      }
+
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
         ? 'video/webm;codecs=vp9'
         : 'video/webm';
@@ -349,6 +384,14 @@ const SlideEditor = () => {
               Duplicate
             </button>
             <button
+              onClick={downloadHD}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary text-secondary-foreground font-handwriting-patrick text-xs hover:bg-secondary/80 transition-colors"
+              title="Download current slide as HD PNG (1080×1920)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              HD
+            </button>
+            <button
               onClick={exportVideo}
               disabled={isExportingVideo || slides.length < 2}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -373,6 +416,12 @@ const SlideEditor = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Audio Trimmer */}
+      <AudioTrimmer
+        totalDuration={slides.length * 3}
+        onAudioChange={setAudioData}
+      />
     </div>
   );
 };
