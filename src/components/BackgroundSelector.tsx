@@ -50,6 +50,15 @@ import bgPenRose from '@/assets/bg-pen-rose.jpg';
 import bgLaceFlower from '@/assets/bg-lace-flower.jpg';
 import bgTornRoses from '@/assets/bg-torn-roses.jpg';
 import bgPeachBlossom from '@/assets/bg-peach-blossom.jpg';
+import bgOrchidWhite from '@/assets/bg-orchid-white.jpg';
+import bgFountainPen from '@/assets/bg-fountain-pen.jpg';
+import bgSpiralBlank from '@/assets/bg-spiral-blank.jpg';
+import bgSpiralHydrangea from '@/assets/bg-spiral-hydrangea.jpg';
+import bgTreePencil from '@/assets/bg-tree-pencil.jpg';
+import bgMinimalDesk from '@/assets/bg-minimal-desk.jpg';
+import bgSceneCreator from '@/assets/bg-scene-creator.jpg';
+import bgStationery from '@/assets/bg-stationery.jpg';
+import bgClipboardPalm from '@/assets/bg-clipboard-palm.jpg';
 
 export interface BackgroundOption {
   id: string;
@@ -108,6 +117,15 @@ export const backgrounds: BackgroundOption[] = [
   { id: 'lace-flower', label: 'Lace', src: bgLaceFlower },
   { id: 'torn-roses', label: 'Torn Roses', src: bgTornRoses },
   { id: 'peach-blossom', label: 'Peach Bloom', src: bgPeachBlossom },
+  { id: 'orchid-white', label: 'Orchid', src: bgOrchidWhite },
+  { id: 'fountain-pen', label: 'Fountain Pen', src: bgFountainPen },
+  { id: 'spiral-blank', label: 'Spiral', src: bgSpiralBlank },
+  { id: 'spiral-hydrangea', label: 'Hydrangea', src: bgSpiralHydrangea },
+  { id: 'tree-pencil', label: 'Tree Pencil', src: bgTreePencil },
+  { id: 'minimal-desk', label: 'Minimal', src: bgMinimalDesk },
+  { id: 'scene-creator', label: 'Scene', src: bgSceneCreator },
+  { id: 'stationery', label: 'Stationery', src: bgStationery },
+  { id: 'clipboard-palm', label: 'Clipboard', src: bgClipboardPalm },
 ];
 
 interface BackgroundSelectorProps {
