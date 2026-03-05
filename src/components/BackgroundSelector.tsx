@@ -40,6 +40,16 @@ import bgSilkCoffee from '@/assets/bg-silk-coffee.jpg';
 import bgPeachNotebook from '@/assets/bg-peach-notebook.jpg';
 import bgInstaFrame from '@/assets/bg-insta-frame.jpg';
 import bgBrickVines from '@/assets/bg-brick-vines.jpg';
+import bgEaselFlowers from '@/assets/bg-easel-flowers.jpg';
+import bgEaselPink from '@/assets/bg-easel-pink.jpg';
+import bgFloralFrame from '@/assets/bg-floral-frame.jpg';
+import bgBlackFrame from '@/assets/bg-black-frame.jpg';
+import bgWhiteBrick from '@/assets/bg-white-brick.jpg';
+import bgCherryWood from '@/assets/bg-cherry-wood.jpg';
+import bgPenRose from '@/assets/bg-pen-rose.jpg';
+import bgLaceFlower from '@/assets/bg-lace-flower.jpg';
+import bgTornRoses from '@/assets/bg-torn-roses.jpg';
+import bgPeachBlossom from '@/assets/bg-peach-blossom.jpg';
 
 export interface BackgroundOption {
   id: string;
@@ -88,6 +98,16 @@ export const backgrounds: BackgroundOption[] = [
   { id: 'peach-notebook', label: 'Peach', src: bgPeachNotebook },
   { id: 'insta-frame', label: 'Insta', src: bgInstaFrame },
   { id: 'brick-vines', label: 'Brick Vines', src: bgBrickVines },
+  { id: 'easel-flowers', label: 'Easel', src: bgEaselFlowers },
+  { id: 'easel-pink', label: 'Easel Pink', src: bgEaselPink },
+  { id: 'floral-frame', label: 'Floral Frame', src: bgFloralFrame },
+  { id: 'black-frame', label: 'Black Frame', src: bgBlackFrame },
+  { id: 'white-brick', label: 'White Brick', src: bgWhiteBrick },
+  { id: 'cherry-wood', label: 'Cherry Wood', src: bgCherryWood },
+  { id: 'pen-rose', label: 'Pen Rose', src: bgPenRose },
+  { id: 'lace-flower', label: 'Lace', src: bgLaceFlower },
+  { id: 'torn-roses', label: 'Torn Roses', src: bgTornRoses },
+  { id: 'peach-blossom', label: 'Peach Bloom', src: bgPeachBlossom },
 ];
 
 interface BackgroundSelectorProps {
