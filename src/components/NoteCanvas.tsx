@@ -79,7 +79,6 @@ const NoteCanvas = ({
   };
 
   const addTextBox = useCallback(() => {
-    const randomTilt = Math.floor(Math.random() * 10) - 5;
     const randomX = 40 + Math.random() * 150;
     const randomY = 60 + Math.random() * 200;
     const id = `text-${Date.now()}`;
@@ -95,7 +94,7 @@ const NoteCanvas = ({
         textAlign: 'center' as const,
         x: randomX,
         y: randomY,
-        rotation: randomTilt,
+        rotation: 0,
         scale: 1,
       },
     ]);
@@ -155,6 +154,18 @@ const NoteCanvas = ({
     if (sticker.textContent !== undefined) {
       setEditingId(sticker.instanceId);
       setEditText(sticker.textContent);
+      // Sync controls to match this text box's style
+      if (sticker.textFont) setFontFamily(sticker.textFont);
+      if (sticker.textSize) setFontSize(sticker.textSize);
+      if (sticker.textColor) {
+        const colorToInk: Record<string, InkColor> = {
+          'hsl(215, 60%, 35%)': 'blue',
+          'hsl(220, 20%, 15%)': 'black',
+          'hsl(0, 70%, 50%)': 'red',
+        };
+        const matched = colorToInk[sticker.textColor];
+        if (matched) setInkColor(matched);
+      }
     }
   }, []);
 
@@ -163,13 +174,19 @@ const NoteCanvas = ({
       setStickers((prev) =>
         prev.map((s) =>
           s.instanceId === editingId
-            ? { ...s, textContent: editText.slice(0, 300) }
+            ? {
+                ...s,
+                textContent: editText.slice(0, 300),
+                textFont: fontFamily,
+                textColor: inkCssMap[inkColor],
+                textSize: fontSize,
+              }
             : s
         )
       );
       setEditingId(null);
     }
-  }, [editingId, editText]);
+  }, [editingId, editText, fontFamily, inkColor, fontSize, inkCssMap]);
 
   const handleExport = async () => {
     if (!canvasRef.current) return;
@@ -396,21 +413,23 @@ const NoteCanvas = ({
                     if (e.target.value.length <= 300) setEditText(e.target.value);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitEdit(); }
                     if (e.key === 'Escape') commitEdit();
                   }}
-                  className="min-w-[120px] max-w-[220px] min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize placeholder:text-muted-foreground/50"
+                  className="min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize-x placeholder:text-muted-foreground/50"
                   style={{
-                    fontFamily: `'${s.textFont || 'Caveat'}', cursive`,
-                    fontSize: `${s.textSize || 24}px`,
-                    color: s.textColor || 'hsl(215, 60%, 35%)',
+                    fontFamily: `'${fontFamily}', cursive`,
+                    fontSize: `${fontSize}px`,
+                    color: inkCssMap[inkColor],
                     lineHeight: '1.4',
                     textAlign: currentAlign,
+                    width: s.textWidth ? `${s.textWidth}px` : '180px',
+                    minWidth: '120px',
+                    maxWidth: '400px',
                   }}
                   maxLength={300}
                 />
                 <div className="text-xs text-muted-foreground font-handwriting-patrick mt-1">
-                  {editText.length}/300 · Enter to save
+                  {editText.length}/300 · Esc to save
                 </div>
               </div>
             );
