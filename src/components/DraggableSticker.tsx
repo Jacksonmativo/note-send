@@ -13,6 +13,7 @@ export interface PlacedSticker {
   textColor?: string;
   textSize?: number;
   textAlign?: 'left' | 'center' | 'right';
+  textWidth?: number;
   x: number;
   y: number;
   rotation: number;
@@ -187,13 +188,15 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
     >
       {sticker.textContent !== undefined ? (
         <div
-          className={`min-w-[60px] max-w-[220px] px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words`}
+          className={`px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words`}
           style={{
             fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
             fontSize: `${sticker.textSize || 24}px`,
             color: sticker.textColor || 'hsl(215, 60%, 35%)',
             lineHeight: '1.4',
             textAlign: sticker.textAlign || 'center',
+            width: sticker.textWidth ? `${sticker.textWidth}px` : '180px',
+            minWidth: '60px',
           }}
         >
           {sticker.textContent || 'Double-click to edit'}
