@@ -76,6 +76,7 @@ const NoteCanvas = ({
     blue: 'hsl(215, 60%, 35%)',
     black: 'hsl(220, 20%, 15%)',
     red: 'hsl(0, 70%, 50%)',
+    green: 'hsl(140, 60%, 30%)',
   };
 
   const addTextBox = useCallback(() => {
@@ -162,6 +163,7 @@ const NoteCanvas = ({
           'hsl(215, 60%, 35%)': 'blue',
           'hsl(220, 20%, 15%)': 'black',
           'hsl(0, 70%, 50%)': 'red',
+          'hsl(140, 60%, 30%)': 'green',
         };
         const matched = colorToInk[sticker.textColor];
         if (matched) setInkColor(matched);
@@ -176,7 +178,7 @@ const NoteCanvas = ({
           s.instanceId === editingId
             ? {
                 ...s,
-                textContent: editText.slice(0, 300),
+                textContent: editText.slice(0, 400),
                 textFont: fontFamily,
                 textColor: inkCssMap[inkColor],
                 textSize: fontSize,
@@ -410,7 +412,7 @@ const NoteCanvas = ({
                   value={editText}
                   placeholder="Your text here"
                   onChange={(e) => {
-                    if (e.target.value.length <= 300) setEditText(e.target.value);
+                    if (e.target.value.length <= 400) setEditText(e.target.value);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') commitEdit();
@@ -426,10 +428,10 @@ const NoteCanvas = ({
                     minWidth: '120px',
                     maxWidth: '400px',
                   }}
-                  maxLength={300}
+                  maxLength={400}
                 />
                 <div className="text-xs text-muted-foreground font-handwriting-patrick mt-1">
-                  {editText.length}/300 · Esc to save
+                  {editText.length}/400 · Esc to save
                 </div>
               </div>
             );

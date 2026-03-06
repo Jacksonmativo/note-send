@@ -115,12 +115,13 @@ export const STICKER_CATEGORIES = [
   { id: 'stars', label: '✨ Stars' },
 ] as const;
 
-export type InkColor = 'blue' | 'black' | 'red';
+export type InkColor = 'blue' | 'black' | 'red' | 'green';
 
 export const INK_COLORS: { id: InkColor; label: string; cssVar: string }[] = [
   { id: 'blue', label: 'Blue Ink', cssVar: 'var(--ink-blue)' },
   { id: 'black', label: 'Black Ink', cssVar: 'var(--ink-black)' },
   { id: 'red', label: 'Red Pen', cssVar: 'var(--ink-red)' },
+  { id: 'green', label: 'Green Pen', cssVar: 'var(--ink-green)' },
 ];
 
 export const FONT_OPTIONS = [

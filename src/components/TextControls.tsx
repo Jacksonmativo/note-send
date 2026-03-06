@@ -32,6 +32,7 @@ const TextControls = ({
               blue: 'hsl(215, 60%, 35%)',
               black: 'hsl(220, 20%, 15%)',
               red: 'hsl(0, 70%, 50%)',
+              green: 'hsl(140, 60%, 30%)',
             };
             return (
               <button
