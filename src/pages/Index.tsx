@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import SlideEditor from '@/components/SlideEditor';
-import { Sparkles, Copy, Check } from 'lucide-react';
+import { Sparkles, Copy, Check, FileSignature } from 'lucide-react';
 
 const Index = () => {
   const [copied, setCopied] = useState(false);
@@ -29,6 +30,13 @@ const Index = () => {
         <p className="text-sm font-handwriting-patrick text-muted-foreground mt-1">
           Write it. Stick it. Send it. ✂️📌
         </p>
+        <Link
+          to="/sign"
+          className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+        >
+          <FileSignature className="w-4 h-4" />
+          Sign a Document
+        </Link>
       </motion.header>
 
       {/* Main */}
