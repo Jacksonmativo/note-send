@@ -385,10 +385,10 @@ const SlideEditor = () => {
             </button>
             <button
               onClick={downloadHD}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary text-secondary-foreground font-handwriting-patrick text-xs hover:bg-secondary/80 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(340,65%,65%)] text-white font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
               title="Download current slide as HD PNG (1080×1920)"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-4 h-4" />
               HD
             </button>
             <button

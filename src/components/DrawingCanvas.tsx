@@ -10,7 +10,7 @@ const COLORS = [
   { id: 'black', css: 'hsl(220, 20%, 15%)' },
   { id: 'blue', css: 'hsl(215, 60%, 35%)' },
   { id: 'red', css: 'hsl(0, 70%, 50%)' },
-  { id: 'green', css: 'hsl(140, 50%, 35%)' },
+  { id: 'green', css: 'hsl(140, 50%, 45%)' },
   { id: 'purple', css: 'hsl(270, 50%, 45%)' },
   { id: 'orange', css: 'hsl(30, 80%, 50%)' },
   { id: 'pink', css: 'hsl(330, 70%, 55%)' },
