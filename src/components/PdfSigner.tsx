@@ -193,7 +193,7 @@ const PdfSigner = () => {
       }
 
       const outputBytes = await pdfDoc.save();
-      const blob = new Blob([outputBytes], { type: 'application/pdf' });
+      const blob = new Blob([new Uint8Array(outputBytes)], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement('a');
