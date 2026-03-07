@@ -188,9 +188,6 @@ const PdfSigner = () => {
             y: pdfY,
             width: stickerDisplayW * scaleX,
             height: stickerDisplayH * scaleY,
-            ...(sticker.rotation
-              ? { rotate: { type: 'degrees' as const, angle: sticker.rotation } }
-              : {}),
           });
         }
       }
