@@ -158,13 +158,25 @@ const PdfSigner = () => {
       const outputBytes = await pdfDoc.save();
       const blob = new Blob([new Uint8Array(outputBytes)], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
+      const downloadName = `signed-${fileName || 'document.pdf'}`;
+
       const link = document.createElement('a');
       link.href = url;
-      link.download = `signed-${fileName || 'document.pdf'}`;
+      link.download = downloadName;
+      link.rel = 'noopener';
       document.body.appendChild(link);
+
+      // Primary: standard browser download
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      // Fallback for browsers that ignore `download` (common on mobile)
+      setTimeout(() => {
+        if (document.visibilityState === 'visible') {
+          window.open(url, '_blank');
+        }
+        URL.revokeObjectURL(url);
+      }, 300);
     } catch (err) {
       console.error('Export failed:', err);
     }
