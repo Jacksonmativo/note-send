@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Upload, ChevronLeft, ChevronRight, Download, Pencil, X, RotateCcw } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Upload, ChevronLeft, ChevronRight, Download, Pencil, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PDFDocument } from 'pdf-lib';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
@@ -22,13 +22,16 @@ const PdfSigner = () => {
 
   const currentStickers = pageStickers[currentPage] || [];
 
-  const setCurrentStickers = useCallback((updater: PlacedSticker[] | ((prev: PlacedSticker[]) => PlacedSticker[])) => {
-    setPageStickers(prev => {
-      const current = prev[currentPage] || [];
-      const newVal = typeof updater === 'function' ? updater(current) : updater;
-      return { ...prev, [currentPage]: newVal };
-    });
-  }, [currentPage]);
+  const setCurrentStickers = useCallback(
+    (updater: PlacedSticker[] | ((prev: PlacedSticker[]) => PlacedSticker[])) => {
+      setPageStickers(prev => {
+        const current = prev[currentPage] || [];
+        const newVal = typeof updater === 'function' ? updater(current) : updater;
+        return { ...prev, [currentPage]: newVal };
+      });
+    },
+    [currentPage]
+  );
 
   const renderPdfPages = useCallback(async (buffer: ArrayBuffer) => {
     setIsLoading(true);
@@ -57,49 +60,80 @@ const PdfSigner = () => {
     setIsLoading(false);
   }, []);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    const buffer = await file.arrayBuffer();
-    setPdfBytes(buffer);
+  const handleFileUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setFileName(file.name);
+      const buffer = await file.arrayBuffer();
+      setPdfBytes(buffer);
+      setPageStickers({});
+      setCurrentPage(0);
+      await renderPdfPages(buffer);
+    },
+    [renderPdfPages]
+  );
+
+  const addDrawnSticker = useCallback(
+    (dataUrl: string) => {
+      const randomX = 80 + Math.random() * 100;
+      const randomY = 80 + Math.random() * 100;
+      setCurrentStickers(prev => [
+        ...prev,
+        {
+          instanceId: `sig-${Date.now()}`,
+          stickerId: 'signature',
+          imageUrl: dataUrl,
+          x: randomX,
+          y: randomY,
+          rotation: 0,
+          scale: 1,
+          layer: 'image' as const,
+        },
+      ]);
+    },
+    [setCurrentStickers]
+  );
+
+  const updateSticker = useCallback(
+    (updated: PlacedSticker) => {
+      setCurrentStickers(prev =>
+        prev.map(s => (s.instanceId === updated.instanceId ? updated : s))
+      );
+    },
+    [setCurrentStickers]
+  );
+
+  const deleteSticker = useCallback(
+    (instanceId: string) => {
+      setCurrentStickers(prev => prev.filter(s => s.instanceId !== instanceId));
+    },
+    [setCurrentStickers]
+  );
+
+  const resetDocument = useCallback(() => {
+    setPdfBytes(null);
+    setPageImages([]);
     setPageStickers({});
     setCurrentPage(0);
-    await renderPdfPages(buffer);
-  }, [renderPdfPages]);
-
-  const addDrawnSticker = useCallback((dataUrl: string) => {
-    const randomX = 80 + Math.random() * 100;
-    const randomY = 80 + Math.random() * 100;
-    setCurrentStickers(prev => [
-      ...prev,
-      {
-        instanceId: `sig-${Date.now()}`,
-        stickerId: 'signature',
-        imageUrl: dataUrl,
-        x: randomX,
-        y: randomY,
-        rotation: 0,
-        scale: 1,
-        layer: 'image' as const,
-      },
-    ]);
-  }, [setCurrentStickers]);
-
-  const updateSticker = useCallback((updated: PlacedSticker) => {
-    setCurrentStickers(prev => prev.map(s => s.instanceId === updated.instanceId ? updated : s));
-  }, [setCurrentStickers]);
-
-  const deleteSticker = useCallback((instanceId: string) => {
-    setCurrentStickers(prev => prev.filter(s => s.instanceId !== instanceId));
-  }, [setCurrentStickers]);
+    setFileName('');
+  }, []);
 
   const exportPdf = useCallback(async () => {
     if (!pdfBytes) return;
     setIsExporting(true);
+
     try {
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const pages = pdfDoc.getPages();
+
+      // Read container dimensions once, reliably, before the loop
+      const containerEl = canvasRef.current;
+      if (!containerEl) throw new Error('Canvas container not found');
+      const rect = containerEl.getBoundingClientRect();
+      const containerW = rect.width || containerEl.offsetWidth;
+      const containerH = rect.height || containerEl.offsetHeight;
+      if (!containerW || !containerH) throw new Error('Container has no dimensions');
 
       for (const [pageIndexStr, stickers] of Object.entries(pageStickers)) {
         const pageIndex = parseInt(pageIndexStr);
@@ -107,44 +141,47 @@ const PdfSigner = () => {
         if (!page || stickers.length === 0) continue;
 
         const { width: pdfW, height: pdfH } = page.getSize();
-        // We need the display dimensions to map coordinates
-        const displayImg = pageImages[pageIndex];
-        if (!displayImg) continue;
+        const scaleX = pdfW / containerW;
+        const scaleY = pdfH / containerH;
 
-        // Get display container dimensions
-        const containerEl = canvasRef.current;
-        const containerW = containerEl?.clientWidth || 400;
-        const containerH = containerEl?.clientHeight || 566;
+        // Base sticker size as a proportion of container (matches DraggableSticker's w-24 = 96px logic,
+        // but derived from the actual rendered container so it stays accurate at any viewport size)
+        const baseSizePx = containerW * 0.15;
 
         for (const sticker of stickers) {
           if (!sticker.imageUrl) continue;
 
-          // Load the sticker image
+          // Decode image bytes from data URL or remote URL
           let imgBytes: Uint8Array;
-          if (sticker.imageUrl.startsWith('data:image/png')) {
+          if (sticker.imageUrl.startsWith('data:')) {
             const base64 = sticker.imageUrl.split(',')[1];
             imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
           } else {
             const resp = await fetch(sticker.imageUrl);
-            const blob = await resp.arrayBuffer();
-            imgBytes = new Uint8Array(blob);
+            if (!resp.ok) throw new Error(`Failed to fetch sticker: ${sticker.imageUrl}`);
+            imgBytes = new Uint8Array(await resp.arrayBuffer());
           }
 
-          const embeddedImg = await pdfDoc.embedPng(imgBytes).catch(async () => {
-            // Try JPEG if PNG fails
-            return await pdfDoc.embedJpg(imgBytes);
-          });
+          // Embed image — try PNG first, fall back to JPEG with explicit try/catch
+          let embeddedImg;
+          try {
+            embeddedImg = await pdfDoc.embedPng(imgBytes);
+          } catch {
+            try {
+              embeddedImg = await pdfDoc.embedJpg(imgBytes);
+            } catch (embedErr) {
+              console.warn(`Skipping sticker ${sticker.instanceId}: could not embed image`, embedErr);
+              continue;
+            }
+          }
 
-          // Map display coordinates to PDF coordinates
-          const stickerDisplayW = 96 * sticker.scale; // w-24 = 96px base
-          const stickerDisplayH = 96 * sticker.scale;
+          const stickerDisplayW = baseSizePx * sticker.scale;
+          const stickerDisplayH = baseSizePx * sticker.scale;
 
-          const scaleX = pdfW / containerW;
-          const scaleY = pdfH / containerH;
-
+          // Map display-space (x, y) to PDF space
+          // PDF origin is bottom-left; display origin is top-left
           const pdfX = sticker.x * scaleX;
-          // PDF y-axis is from bottom
-          const pdfY = pdfH - (sticker.y * scaleY) - (stickerDisplayH * scaleY);
+          const pdfY = pdfH - sticker.y * scaleY - stickerDisplayH * scaleY;
 
           page.drawImage(embeddedImg, {
             x: pdfX,
@@ -158,37 +195,35 @@ const PdfSigner = () => {
       const outputBytes = await pdfDoc.save();
       const blob = new Blob([new Uint8Array(outputBytes)], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const downloadName = `signed-${fileName || 'document.pdf'}`;
 
       const link = document.createElement('a');
       link.href = url;
-      link.download = downloadName;
-      link.rel = 'noopener';
+      link.download = `signed-${fileName || 'document.pdf'}`;
+      link.style.display = 'none';
       document.body.appendChild(link);
-
-      // Primary: standard browser download
       link.click();
-      document.body.removeChild(link);
 
-      // Fallback for browsers that ignore `download` (common on mobile)
       setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-          window.open(url, '_blank');
-        }
+        document.body.removeChild(link);
         URL.revokeObjectURL(url);
-      }, 300);
+      }, 1000);
     } catch (err) {
       console.error('Export failed:', err);
+      alert('Export failed — please try again.');
     }
-    setIsExporting(false);
-  }, [pdfBytes, pageStickers, pageImages, fileName]);
 
+    setIsExporting(false);
+  }, [pdfBytes, pageStickers, fileName]);
+
+  // ── Upload screen ────────────────────────────────────────────────────────────
   if (!pdfBytes) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-8">
         <label className="flex flex-col items-center gap-3 px-8 py-6 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary hover:bg-accent/50 transition-colors">
           <Upload className="w-10 h-10 text-muted-foreground" />
-          <span className="text-sm font-handwriting-patrick text-muted-foreground">Upload PDF or Document</span>
+          <span className="text-sm font-handwriting-patrick text-muted-foreground">
+            Upload PDF or Document
+          </span>
           <input
             type="file"
             accept=".pdf"
@@ -200,6 +235,7 @@ const PdfSigner = () => {
     );
   }
 
+  // ── Loading screen ───────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -210,6 +246,7 @@ const PdfSigner = () => {
     );
   }
 
+  // ── Main editor ──────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col lg:flex-row gap-4 w-full max-w-5xl mx-auto p-4">
       {/* Side controls */}
@@ -225,29 +262,25 @@ const PdfSigner = () => {
           <Pencil className="w-4 h-4" />
           Draw Signature
         </button>
+
         <button
           onClick={exportPdf}
           disabled={isExporting}
           className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap lg:w-full"
         >
           <Download className="w-4 h-4" />
-          {isExporting ? 'Exporting...' : 'Save as PDF'}
+          {isExporting ? 'Exporting…' : 'Save as PDF'}
         </button>
+
         <button
-          onClick={() => {
-            setPdfBytes(null);
-            setPageImages([]);
-            setPageStickers({});
-            setCurrentPage(0);
-            setFileName('');
-          }}
+          onClick={resetDocument}
           className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors whitespace-nowrap lg:w-full"
         >
           <RotateCcw className="w-4 h-4" />
           New Document
         </button>
 
-        {/* Page info */}
+        {/* Page counter */}
         <div className="flex items-center gap-2 lg:mt-auto">
           <span className="text-xs font-handwriting-patrick text-muted-foreground whitespace-nowrap">
             Page {currentPage + 1} / {pageImages.length}
@@ -282,7 +315,7 @@ const PdfSigner = () => {
         <div
           ref={canvasRef}
           className="relative w-full max-w-lg bg-white rounded-lg overflow-hidden paper-shadow"
-          style={{ aspectRatio: '210 / 297' }} /* A4 aspect ratio */
+          style={{ aspectRatio: '210 / 297' }}
         >
           {pageImages[currentPage] && (
             <img
@@ -293,7 +326,6 @@ const PdfSigner = () => {
             />
           )}
 
-          {/* Stickers on this page */}
           {currentStickers.map(sticker => (
             <DraggableSticker
               key={sticker.instanceId}
@@ -313,7 +345,9 @@ const PdfSigner = () => {
                 key={i}
                 onClick={() => setCurrentPage(i)}
                 className={`flex-shrink-0 w-12 h-16 rounded border-2 overflow-hidden transition-all ${
-                  i === currentPage ? 'border-primary scale-105' : 'border-border opacity-60 hover:opacity-100'
+                  i === currentPage
+                    ? 'border-primary scale-105'
+                    : 'border-border opacity-60 hover:opacity-100'
                 }`}
               >
                 <img src={img} alt={`Page ${i + 1}`} className="w-full h-full object-cover" />
@@ -326,7 +360,7 @@ const PdfSigner = () => {
       {/* Drawing Canvas Modal */}
       {isDrawing && (
         <DrawingCanvas
-          onSave={(dataUrl) => {
+          onSave={dataUrl => {
             addDrawnSticker(dataUrl);
             setIsDrawing(false);
           }}
