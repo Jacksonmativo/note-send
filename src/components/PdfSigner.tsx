@@ -66,7 +66,7 @@ const PdfSigner = () => {
       if (!file) return;
       setFileName(file.name);
       const buffer = await file.arrayBuffer();
-      setPdfBytes(buffer);
+      setPdfBytes(buffer.slice(0)); // Store a copy to prevent detachment
       setPageStickers({});
       setCurrentPage(0);
       await renderPdfPages(buffer);
