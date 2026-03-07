@@ -76,7 +76,7 @@ const NoteCanvas = ({
     blue: 'hsl(215, 60%, 35%)',
     black: 'hsl(220, 20%, 15%)',
     red: 'hsl(0, 70%, 50%)',
-    green: 'hsl(140, 60%, 30%)',
+    green: 'hsl(140, 50%, 45%)',
   };
 
   const addTextBox = useCallback(() => {
@@ -163,7 +163,7 @@ const NoteCanvas = ({
           'hsl(215, 60%, 35%)': 'blue',
           'hsl(220, 20%, 15%)': 'black',
           'hsl(0, 70%, 50%)': 'red',
-          'hsl(140, 60%, 30%)': 'green',
+          'hsl(140, 50%, 45%)': 'green',
         };
         const matched = colorToInk[sticker.textColor];
         if (matched) setInkColor(matched);
