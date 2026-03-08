@@ -13,6 +13,7 @@ const PdfSigner = () => {
   const [pdfBytes, setPdfBytes] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState('');
   const [pageImages, setPageImages] = useState<string[]>([]);
+  const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number }[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageStickers, setPageStickers] = useState<PageStickers>({});
   const [isDrawing, setIsDrawing] = useState(false);
@@ -41,10 +42,19 @@ const PdfSigner = () => {
 
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
       const images: string[] = [];
+      const dimensions: { width: number; height: number }[] = [];
 
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const viewport = page.getViewport({ scale: 2 });
+
+        // Store the actual PDF dimensions (at scale 1)
+        const originalViewport = page.getViewport({ scale: 1 });
+        dimensions.push({
+          width: originalViewport.width,
+          height: originalViewport.height
+        });
+
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -54,6 +64,7 @@ const PdfSigner = () => {
       }
 
       setPageImages(images);
+      setPageDimensions(dimensions);
     } catch (err) {
       console.error('Failed to render PDF:', err);
     }
@@ -114,6 +125,7 @@ const PdfSigner = () => {
   const resetDocument = useCallback(() => {
     setPdfBytes(null);
     setPageImages([]);
+    setPageDimensions([]);
     setPageStickers({});
     setCurrentPage(0);
     setFileName('');
@@ -141,12 +153,20 @@ const PdfSigner = () => {
         if (!page || stickers.length === 0) continue;
 
         const { width: pdfW, height: pdfH } = page.getSize();
-        const scaleX = pdfW / containerW;
-        const scaleY = pdfH / containerH;
 
-        // Base sticker size as a proportion of container (matches DraggableSticker's w-24 = 96px logic,
-        // but derived from the actual rendered container so it stays accurate at any viewport size)
-        const baseSizePx = containerW * 0.15;
+        // The PNG image is rendered at 2x scale
+        const pngW = pdfW * 2;
+        const pngH = pdfH * 2;
+
+        // Calculate how the PNG image (at 2x scale) is scaled within the container (object-contain)
+        const imgScale = Math.min(containerW / pngW, containerH / pngH);
+        const displayedWidth = pngW * imgScale;
+        const displayedHeight = pngH * imgScale;
+        const offsetX = (containerW - displayedWidth) / 2;
+        const offsetY = (containerH - displayedHeight) / 2;
+
+        // Base sticker size - fixed at 96px to match DraggableSticker's w-24 (6rem = 96px)
+        const baseSizePx = 96;
 
         for (const sticker of stickers) {
           if (!sticker.imageUrl) continue;
@@ -175,19 +195,70 @@ const PdfSigner = () => {
             }
           }
 
-          const stickerDisplayW = baseSizePx * sticker.scale;
-          const stickerDisplayH = baseSizePx * sticker.scale;
+          // Get the actual dimensions of the embedded image
+          const imgDims = embeddedImg.scale(1);
+          const imgAspectRatio = imgDims.width / imgDims.height;
 
-          // Map display-space (x, y) to PDF space
+          // DraggableSticker uses w-24 h-24 (96×96 unscaled) with object-contain and scale transform
+          // The scale transform has transform-origin: center, so scaling shifts the visual position
+
+          // Step 1: Calculate unscaled image dimensions (object-contain within 96×96)
+          let unscaledW, unscaledH;
+          if (imgAspectRatio > 1) {
+            unscaledW = baseSizePx;
+            unscaledH = baseSizePx / imgAspectRatio;
+          } else {
+            unscaledH = baseSizePx;
+            unscaledW = baseSizePx * imgAspectRatio;
+          }
+
+          // Step 2: Account for transform-origin: center
+          // The container (96×96) is at (sticker.x, sticker.y), then scaled from its center
+          // Center of unscaled container: (sticker.x + 48, sticker.y + 48)
+          // After scaling, container is (96s × 96s), center stays the same
+          // New top-left of container: center - (96s / 2, 96s / 2)
+          const scaledContainerHalf = (baseSizePx * sticker.scale) / 2;
+          const unscaledContainerHalf = baseSizePx / 2;
+          const containerOffsetX = unscaledContainerHalf - scaledContainerHalf;
+          const containerOffsetY = unscaledContainerHalf - scaledContainerHalf;
+
+          // Adjusted sticker position (top-left of scaled container)
+          const adjustedX = sticker.x - containerOffsetX;
+          const adjustedY = sticker.y - containerOffsetY;
+
+          // Step 3: Calculate where the image sits within the scaled container (centered due to object-contain)
+          const scaledW = unscaledW * sticker.scale;
+          const scaledH = unscaledH * sticker.scale;
+          const imageOffsetX = (baseSizePx * sticker.scale - scaledW) / 2;
+          const imageOffsetY = (baseSizePx * sticker.scale - scaledH) / 2;
+
+          // Final image position in display coordinates
+          const imageX = adjustedX + imageOffsetX;
+          const imageY = adjustedY + imageOffsetY;
+
+          // Convert to coordinates relative to the displayed PDF image
+          const displayX = imageX - offsetX;
+          const displayY = imageY - offsetY;
+
+          // Convert from display coordinates to PNG coordinates
+          const pngX = displayX / imgScale;
+          const pngY = displayY / imgScale;
+
+          // Convert from PNG coordinates to PDF coordinates
+          // PNG is 2x the PDF size, so divide by 2
+          const pdfX = pngX / 2;
           // PDF origin is bottom-left; display origin is top-left
-          const pdfX = sticker.x * scaleX;
-          const pdfY = pdfH - sticker.y * scaleY - stickerDisplayH * scaleY;
+          const pdfY = pdfH - (pngY / 2) - (scaledH / imgScale / 2);
+
+          // Size in PDF coordinates
+          const pdfStickerW = scaledW / imgScale / 2;
+          const pdfStickerH = scaledH / imgScale / 2;
 
           page.drawImage(embeddedImg, {
             x: pdfX,
             y: pdfY,
-            width: stickerDisplayW * scaleX,
-            height: stickerDisplayH * scaleY,
+            width: pdfStickerW,
+            height: pdfStickerH,
           });
         }
       }
@@ -214,6 +285,11 @@ const PdfSigner = () => {
 
     setIsExporting(false);
   }, [pdfBytes, pageStickers, fileName]);
+
+  // Get current page aspect ratio
+  const currentPageAspectRatio = pageDimensions[currentPage]
+    ? `${pageDimensions[currentPage].width} / ${pageDimensions[currentPage].height}`
+    : '210 / 297'; // fallback to A4 portrait
 
   // ── Upload screen ────────────────────────────────────────────────────────────
   if (!pdfBytes) {
@@ -315,7 +391,7 @@ const PdfSigner = () => {
         <div
           ref={canvasRef}
           className="relative w-full max-w-lg bg-white rounded-lg overflow-hidden paper-shadow"
-          style={{ aspectRatio: '210 / 297' }}
+          style={{ aspectRatio: currentPageAspectRatio }}
         >
           {pageImages[currentPage] && (
             <img
