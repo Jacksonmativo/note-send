@@ -1,34 +1,38 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, Crop, Check, X } from 'lucide-react';
+import { Upload, Check, X } from 'lucide-react';
 
 interface ImageUploadPanelProps {
   onAddImageSticker: (imageUrl: string) => void;
 }
 
-const toDataUrl = (source: Blob | File, maxSize = 800): Promise<string> => {
+const MAX_FILE_MB = 50;
+const OUTPUT_MAX_SIZE = 2400;
+
+const resizeToDataUrl = (img: HTMLImageElement, maxSize = OUTPUT_MAX_SIZE): string => {
+  let { width, height } = img;
+  if (width > maxSize || height > maxSize) {
+    const ratio = Math.min(maxSize / width, maxSize / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
+};
+
+const loadImageFromFile = (file: File): Promise<{ img: HTMLImageElement; objectUrl: string }> => {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = reject;
-      img.src = reader.result as string;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, objectUrl });
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image'));
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(source);
+    img.src = objectUrl;
   });
 };
 
@@ -39,19 +43,51 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isCropping, setIsCropping] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [cropBox, setCropBox] = useState({ x: 10, y: 10, w: 80, h: 80 }); // percentages
-  const [dragState, setDragState] = useState<null | { type: 'move' | 'resize'; startX: number; startY: number; startCrop: typeof cropBox }>(null);
+  const [dragState, setDragState] = useState<null | {
+    type: 'move' | 'resize';
+    startX: number;
+    startY: number;
+    startCrop: typeof cropBox;
+  }>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
-
-    const dataUrl = await toDataUrl(file);
-    setPreviewUrl(dataUrl);
-    setIsCropping(true);
-    setCropBox({ x: 10, y: 10, w: 80, h: 80 });
-
     if (fileInputRef.current) fileInputRef.current.value = '';
+
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file.');
+      return;
+    }
+
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      setError(`File too large. Maximum size is ${MAX_FILE_MB}MB.`);
+      return;
+    }
+
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const { img, objectUrl } = await loadImageFromFile(file);
+
+      // Use a resized data URL as preview so the crop canvas renders correctly
+      // and we don't hold a large object URL open during the crop interaction.
+      const dataUrl = resizeToDataUrl(img, OUTPUT_MAX_SIZE);
+      URL.revokeObjectURL(objectUrl);
+
+      setPreviewUrl(dataUrl);
+      setIsCropping(true);
+      setCropBox({ x: 10, y: 10, w: 80, h: 80 });
+    } catch {
+      setError('Could not read image. Please try another file.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getRelativePos = useCallback((clientX: number, clientY: number) => {
@@ -64,31 +100,37 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
     };
   }, []);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent, type: 'move' | 'resize') => {
-    e.preventDefault();
-    e.stopPropagation();
-    const { px, py } = getRelativePos(e.clientX, e.clientY);
-    setDragState({ type, startX: px, startY: py, startCrop: { ...cropBox } });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [cropBox, getRelativePos]);
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent, type: 'move' | 'resize') => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { px, py } = getRelativePos(e.clientX, e.clientY);
+      setDragState({ type, startX: px, startY: py, startCrop: { ...cropBox } });
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [cropBox, getRelativePos]
+  );
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragState) return;
-    const { px, py } = getRelativePos(e.clientX, e.clientY);
-    const dx = px - dragState.startX;
-    const dy = py - dragState.startY;
-    const s = dragState.startCrop;
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragState) return;
+      const { px, py } = getRelativePos(e.clientX, e.clientY);
+      const dx = px - dragState.startX;
+      const dy = py - dragState.startY;
+      const s = dragState.startCrop;
 
-    if (dragState.type === 'move') {
-      const newX = Math.max(0, Math.min(100 - s.w, s.x + dx));
-      const newY = Math.max(0, Math.min(100 - s.h, s.y + dy));
-      setCropBox({ ...s, x: newX, y: newY });
-    } else {
-      const newW = Math.max(10, Math.min(100 - s.x, s.w + dx));
-      const newH = Math.max(10, Math.min(100 - s.y, s.h + dy));
-      setCropBox({ ...s, w: newW, h: newH });
-    }
-  }, [dragState, getRelativePos]);
+      if (dragState.type === 'move') {
+        const newX = Math.max(0, Math.min(100 - s.w, s.x + dx));
+        const newY = Math.max(0, Math.min(100 - s.h, s.y + dy));
+        setCropBox({ ...s, x: newX, y: newY });
+      } else {
+        const newW = Math.max(10, Math.min(100 - s.x, s.w + dx));
+        const newH = Math.max(10, Math.min(100 - s.y, s.h + dy));
+        setCropBox({ ...s, w: newW, h: newH });
+      }
+    },
+    [dragState, getRelativePos]
+  );
 
   const handlePointerUp = useCallback(() => {
     setDragState(null);
@@ -99,12 +141,12 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
     const img = imgRef.current;
     if (!img) return;
 
-    const canvas = document.createElement('canvas');
     const sx = (cropBox.x / 100) * img.naturalWidth;
     const sy = (cropBox.y / 100) * img.naturalHeight;
     const sw = (cropBox.w / 100) * img.naturalWidth;
     const sh = (cropBox.h / 100) * img.naturalHeight;
 
+    const canvas = document.createElement('canvas');
     canvas.width = Math.round(sw);
     canvas.height = Math.round(sh);
     const ctx = canvas.getContext('2d')!;
@@ -119,6 +161,13 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
   const cancelCrop = () => {
     setIsCropping(false);
     setPreviewUrl(null);
+    setError(null);
+  };
+
+  const reset = () => {
+    setPreviewUrl(null);
+    setIsCropping(false);
+    setError(null);
   };
 
   return (
@@ -129,11 +178,11 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
 
       <button
         onClick={() => fileInputRef.current?.click()}
-        disabled={isCropping}
+        disabled={isCropping || isLoading}
         className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 border-dashed border-border bg-secondary/50 text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors disabled:opacity-50"
       >
         <Upload className="w-4 h-4" />
-        Choose Image
+        {isLoading ? 'Loading…' : 'Choose Image'}
       </button>
 
       <input
@@ -144,14 +193,20 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
         className="hidden"
       />
 
+      {/* Error message */}
+      {error && (
+        <p className="text-xs text-destructive font-handwriting-patrick">{error}</p>
+      )}
+
       {/* Crop UI */}
       {isCropping && previewUrl && (
         <div className="flex flex-col gap-2">
           <div
             ref={cropAreaRef}
-            className="relative w-full aspect-square rounded-md overflow-hidden border border-border bg-muted"
+            className="relative w-full aspect-square rounded-md overflow-hidden border border-border bg-muted select-none"
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
           >
             <img
               ref={imgRef}
@@ -160,30 +215,38 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
               className="w-full h-full object-contain"
               draggable={false}
             />
-            {/* Dimming overlay */}
-            <div className="absolute inset-0" style={{
-              background: `linear-gradient(to right, 
-                rgba(0,0,0,0.5) ${cropBox.x}%, 
-                transparent ${cropBox.x}%, 
-                transparent ${cropBox.x + cropBox.w}%, 
-                rgba(0,0,0,0.5) ${cropBox.x + cropBox.w}%)`,
-            }} />
-            <div className="absolute" style={{
-              left: `${cropBox.x}%`,
-              width: `${cropBox.w}%`,
-              top: 0,
-              height: `${cropBox.y}%`,
-              background: 'rgba(0,0,0,0.5)',
-            }} />
-            <div className="absolute" style={{
-              left: `${cropBox.x}%`,
-              width: `${cropBox.w}%`,
-              top: `${cropBox.y + cropBox.h}%`,
-              bottom: 0,
-              background: 'rgba(0,0,0,0.5)',
-            }} />
 
-            {/* Crop selection */}
+            {/* Dimming overlay — four surrounding quadrants */}
+            {/* Left */}
+            <div
+              className="absolute inset-y-0 left-0 bg-black/50 pointer-events-none"
+              style={{ width: `${cropBox.x}%` }}
+            />
+            {/* Right */}
+            <div
+              className="absolute inset-y-0 right-0 bg-black/50 pointer-events-none"
+              style={{ width: `${100 - cropBox.x - cropBox.w}%` }}
+            />
+            {/* Top (between left and right) */}
+            <div
+              className="absolute top-0 bg-black/50 pointer-events-none"
+              style={{
+                left: `${cropBox.x}%`,
+                width: `${cropBox.w}%`,
+                height: `${cropBox.y}%`,
+              }}
+            />
+            {/* Bottom (between left and right) */}
+            <div
+              className="absolute bottom-0 bg-black/50 pointer-events-none"
+              style={{
+                left: `${cropBox.x}%`,
+                width: `${cropBox.w}%`,
+                height: `${100 - cropBox.y - cropBox.h}%`,
+              }}
+            />
+
+            {/* Crop selection box */}
             <div
               className="absolute border-2 border-white cursor-move"
               style={{
@@ -194,6 +257,13 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
               }}
               onPointerDown={(e) => handlePointerDown(e, 'move')}
             >
+              {/* Corner rule-of-thirds guides */}
+              <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="border border-white/20" />
+                ))}
+              </div>
+
               {/* Resize handle */}
               <div
                 className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white rounded-full border border-primary cursor-nwse-resize"
@@ -220,10 +290,18 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
         </div>
       )}
 
-      {/* Thumbnail of last added */}
+      {/* Thumbnail of last added image */}
       {!isCropping && previewUrl && (
-        <div className="relative w-16 h-16 mx-auto rounded-md overflow-hidden border border-border bg-[repeating-conic-gradient(hsl(var(--muted))_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
-          <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+        <div className="flex flex-col items-center gap-1">
+          <div className="relative w-16 h-16 rounded-md overflow-hidden border border-border bg-[repeating-conic-gradient(hsl(var(--muted))_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]">
+            <img src={previewUrl} alt="Last added sticker" className="w-full h-full object-contain" />
+          </div>
+          <button
+            onClick={reset}
+            className="text-xs text-muted-foreground hover:text-foreground font-handwriting-patrick transition-colors"
+          >
+            Upload another
+          </button>
         </div>
       )}
     </div>

@@ -224,13 +224,6 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
           <button onClick={clearCanvas} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-handwriting-patrick hover:bg-muted/80 transition-colors active:scale-95">
             <Trash2 className="w-4 h-4" /> Clear
           </button>
-          <div className="flex-1" />
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-handwriting-patrick hover:opacity-90 transition-opacity active:scale-95"
-          >
-            <Check className="w-4 h-4" /> Save Sticker
-          </button>
         </div>
       </div>
     </div>

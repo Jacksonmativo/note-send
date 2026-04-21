@@ -14,10 +14,11 @@ interface SlideState {
   backgroundId: string;
 }
 
-const MAX_SLIDES = 30; // 90s max / 3s per slide
+const MAX_SLIDES = 30;
 const SLIDE_DURATION_MS = 3000;
-const TRANSITION_MS = 500; // crossfade duration
-const TRANSITION_FRAMES = 30; // frames during transition at 60fps
+const TRANSITION_MS = 500;
+const FPS = 60;
+const FRAME_MS = 1000 / FPS;
 
 const SlideEditor = () => {
   const [slides, setSlides] = useState<SlideState[]>([
@@ -26,9 +27,16 @@ const SlideEditor = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isExportingVideo, setIsExportingVideo] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const [audioData, setAudioData] = useState<{ buffer: AudioBuffer; startTime: number; endTime: number } | null>(null);
+  const [exportStatus, setExportStatus] = useState('');
+  const [audioData, setAudioData] = useState<{
+    buffer: AudioBuffer;
+    startTime: number;
+    endTime: number;
+  } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  // Ref to allow cancelling an in-progress export
+  const exportCancelledRef = useRef(false);
 
   const currentSlide = slides[currentIndex];
 
@@ -50,7 +58,6 @@ const SlideEditor = () => {
     };
     setSlides((prev) => [...prev, newSlide]);
     setCurrentIndex(slides.length);
-    // Scroll strip to end
     setTimeout(() => {
       stripRef.current?.scrollTo({ left: stripRef.current.scrollWidth, behavior: 'smooth' });
     }, 50);
@@ -94,7 +101,7 @@ const SlideEditor = () => {
     try {
       const dataUrl = await toPng(canvasRef.current, {
         quality: 1,
-        pixelRatio: 4, // Higher pixel ratio for HD 1080x1920
+        pixelRatio: 4,
         cacheBust: true,
       });
       const link = document.createElement('a');
@@ -108,20 +115,41 @@ const SlideEditor = () => {
     }
   };
 
-  // Video export using Canvas + MediaRecorder
+  // Load an HTMLImageElement from a data URL
+  const loadImg = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+  // Ease-in-out curve for smooth crossfades
+  const easeInOut = (t: number) =>
+    t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+  // Video export: frame-by-frame deterministic loop so MediaRecorder
+  // captures every frame at the correct time.
   const exportVideo = async () => {
     if (!canvasRef.current || slides.length < 2) return;
+
     setIsExportingVideo(true);
     setExportProgress(0);
+    setExportStatus('Capturing slides...');
+    exportCancelledRef.current = false;
+
+    const images: string[] = [];
+    const originalIndex = currentIndex;
 
     try {
-      const images: string[] = [];
-      const originalIndex = currentIndex;
-
-      // Phase 1: Capture each slide as PNG
+      // ── Phase 1: render each slide to PNG ──────────────────────────────
       for (let i = 0; i < slides.length; i++) {
+        if (exportCancelledRef.current) throw new Error('cancelled');
+
         setCurrentIndex(i);
         setExportProgress(Math.round((i / slides.length) * 40));
+
+        // Wait for React to re-render the canvas with the new slide
         await new Promise((r) => setTimeout(r, 400));
 
         const dataUrl = await toPng(canvasRef.current!, {
@@ -133,26 +161,36 @@ const SlideEditor = () => {
       }
 
       setCurrentIndex(originalIndex);
+      setExportProgress(42);
+      setExportStatus('Loading images...');
+
+      // ── Phase 2: pre-load all captured PNGs into Image elements ────────
+      const loadedImages = await Promise.all(images.map(loadImg));
+
+      if (exportCancelledRef.current) throw new Error('cancelled');
+
       setExportProgress(45);
+      setExportStatus('Encoding video...');
 
-      // Phase 2: Create video
-      const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1920;
-      const ctx = canvas.getContext('2d')!;
+      // ── Phase 3: set up off-screen canvas + MediaRecorder ──────────────
+      const offscreen = document.createElement('canvas');
+      offscreen.width = 1080;
+      offscreen.height = 1920;
+      const ctx = offscreen.getContext('2d')!;
 
-      const stream = canvas.captureStream(60);
+      const stream = offscreen.captureStream(FPS);
 
-      // Mix audio into stream if available
+      // Attach audio track if provided
+      let audioCtx: AudioContext | null = null;
       if (audioData) {
-        const audioCtx = new AudioContext();
+        audioCtx = new AudioContext();
         const source = audioCtx.createBufferSource();
         source.buffer = audioData.buffer;
         const dest = audioCtx.createMediaStreamDestination();
         source.connect(dest);
-        dest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-        const audioDuration = audioData.endTime - audioData.startTime;
-        source.start(0, audioData.startTime, audioDuration);
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+        const duration = audioData.endTime - audioData.startTime;
+        source.start(0, audioData.startTime, duration);
       }
 
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
@@ -175,85 +213,92 @@ const SlideEditor = () => {
 
       recorder.start();
 
-      // Helper to load an image
-      const loadImg = (src: string) =>
-        new Promise<HTMLImageElement>((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.src = src;
-        });
+      // ── Phase 4: frame-by-frame draw loop ──────────────────────────────
+      //
+      // Strategy: for each slide we draw `holdFrames` frames showing only
+      // that slide, then `transFrames` frames crossfading into the next.
+      // The last slide only holds — no trailing transition.
+      //
+      // We pace each frame with setTimeout(fn, FRAME_MS) which gives the
+      // canvas.captureStream() enough time to pull each drawn frame before
+      // we overwrite it, producing a smooth, gap-free video track.
 
-      // Helper: wait using requestAnimationFrame for proper stream sync
-      const waitFrames = (ms: number) =>
-        new Promise<void>((resolve) => {
-          const start = performance.now();
-          const tick = () => {
-            ctx.getImageData(0, 0, 1, 1); // force flush
-            if (performance.now() - start >= ms) {
-              resolve();
-            } else {
-              requestAnimationFrame(tick);
-            }
-          };
-          requestAnimationFrame(tick);
-        });
+      const holdFrames = Math.round((SLIDE_DURATION_MS - TRANSITION_MS) / FRAME_MS);
+      const transFrames = Math.round(TRANSITION_MS / FRAME_MS);
+      const totalSlides = loadedImages.length;
+      // Total frame count
+      const totalFrames =
+        totalSlides * holdFrames + (totalSlides - 1) * transFrames;
 
-      // Pre-load all images
-      const loadedImages = await Promise.all(images.map(loadImg));
+      await new Promise<void>((resolve, reject) => {
+        let frame = 0;
 
-      // Prime the recorder with first frame to avoid initial delay
-      ctx.globalAlpha = 1;
-      ctx.drawImage(loadedImages[0], 0, 0, canvas.width, canvas.height);
-      await waitFrames(50);
+        const drawFrame = () => {
+          if (exportCancelledRef.current) {
+            reject(new Error('cancelled'));
+            return;
+          }
 
-      // Draw each slide with crossfade transitions
-      for (let i = 0; i < loadedImages.length; i++) {
-        setExportProgress(45 + Math.round((i / loadedImages.length) * 50));
+          if (frame >= totalFrames) {
+            resolve();
+            return;
+          }
 
-        const currentImg = loadedImages[i];
+          // Determine which slide and phase we're in.
+          // Each "slot" is holdFrames + transFrames wide, except the last
+          // slide which is only holdFrames wide.
+          const slotWidth = holdFrames + transFrames;
+          const slideIndex = Math.min(
+            Math.floor(frame / slotWidth),
+            totalSlides - 1
+          );
+          const frameInSlot = frame - slideIndex * slotWidth;
+          const isLastSlide = slideIndex === totalSlides - 1;
 
-        // Draw the current slide fully
-        ctx.globalAlpha = 1;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+          const curImg = loadedImages[slideIndex];
+          const nextImg = !isLastSlide ? loadedImages[slideIndex + 1] : null;
 
-        // Hold the slide (minus transition time if there's a next slide)
-        const holdTime = i < loadedImages.length - 1 ? SLIDE_DURATION_MS - TRANSITION_MS : SLIDE_DURATION_MS;
-        await waitFrames(holdTime);
+          ctx.globalAlpha = 1;
+          ctx.clearRect(0, 0, offscreen.width, offscreen.height);
 
-        // Crossfade to next slide
-        if (i < loadedImages.length - 1) {
-          const nextImg = loadedImages[i + 1];
-          const transitionStart = performance.now();
+          if (frameInSlot < holdFrames || !nextImg) {
+            // ── Hold phase: show current slide only ──
+            ctx.drawImage(curImg, 0, 0, offscreen.width, offscreen.height);
+          } else {
+            // ── Transition phase: crossfade current → next ──
+            const rawT = (frameInSlot - holdFrames) / transFrames;
+            const alpha = easeInOut(Math.min(rawT, 1));
 
-          await new Promise<void>((resolve) => {
-            const animateTransition = () => {
-              const elapsed = performance.now() - transitionStart;
-              const progress = Math.min(elapsed / TRANSITION_MS, 1);
+            // Draw current slide at full opacity
+            ctx.globalAlpha = 1;
+            ctx.drawImage(curImg, 0, 0, offscreen.width, offscreen.height);
 
-              ctx.globalAlpha = 1;
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-              ctx.globalAlpha = progress;
-              ctx.drawImage(nextImg, 0, 0, canvas.width, canvas.height);
+            // Draw next slide on top with increasing opacity
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(nextImg, 0, 0, offscreen.width, offscreen.height);
 
-              if (progress < 1) {
-                requestAnimationFrame(animateTransition);
-              } else {
-                ctx.globalAlpha = 1;
-                resolve();
-              }
-            };
-            requestAnimationFrame(animateTransition);
-          });
-        }
-      }
+            // Reset alpha
+            ctx.globalAlpha = 1;
+          }
 
+          // Update progress bar (45 → 95%)
+          setExportProgress(45 + Math.round((frame / totalFrames) * 50));
+
+          frame++;
+          setTimeout(drawFrame, FRAME_MS);
+        };
+
+        // Kick off with a small initial delay so the recorder is fully ready
+        setTimeout(drawFrame, 100);
+      });
+
+      // ── Phase 5: stop recording + download ─────────────────────────────
       recorder.stop();
+      if (audioCtx) audioCtx.close();
       setExportProgress(95);
-      const blob = await videoPromise;
+      setExportStatus('Finishing up...');
 
-      // Download
+      const blob = await videoPromise;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -262,13 +307,24 @@ const SlideEditor = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
       setExportProgress(100);
-    } catch (err) {
-      console.error('Video export failed:', err);
+      setExportStatus('Done!');
+      await new Promise((r) => setTimeout(r, 800));
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message !== 'cancelled') {
+        console.error('Video export failed:', err);
+      }
+      setCurrentIndex(originalIndex);
     }
 
     setIsExportingVideo(false);
     setExportProgress(0);
+    setExportStatus('');
+  };
+
+  const cancelExport = () => {
+    exportCancelledRef.current = true;
   };
 
   return (
@@ -307,7 +363,7 @@ const SlideEditor = () => {
               <button
                 key={slide.id}
                 onClick={() => goToSlide(i)}
-                className={`relative flex-shrink-0 w-16 h-20 rounded-md overflow-hidden border-2 transition-all hover:scale-105 ${
+                className={`relative flex-shrink-0 w-16 h-20 rounded-md overflow-hidden border-2 transition-all hover:scale-105 group ${
                   i === currentIndex
                     ? 'border-primary ring-1 ring-primary shadow-md'
                     : 'border-border hover:border-muted-foreground/50'
@@ -336,12 +392,7 @@ const SlideEditor = () => {
                       e.stopPropagation();
                       deleteSlide(i);
                     }}
-                    className="absolute top-0 right-0 w-4 h-4 bg-destructive rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity"
-                    style={{ opacity: i === currentIndex ? 0.8 : 0 }}
-                    onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '1')}
-                    onMouseLeave={(e) =>
-                      ((e.target as HTMLElement).style.opacity = i === currentIndex ? '0.8' : '0')
-                    }
+                    className="absolute top-0 right-0 w-4 h-4 bg-destructive rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <Trash2 className="w-2.5 h-2.5 text-destructive-foreground" />
                   </button>
@@ -385,34 +436,46 @@ const SlideEditor = () => {
             </button>
             <button
               onClick={downloadHD}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(340,65%,65%)] text-white font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+              disabled={isExportingVideo}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(340,65%,65%)] text-white font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
               title="Download current slide as HD PNG (1080×1920)"
             >
               <Download className="w-4 h-4" />
               HD
             </button>
-            <button
-              onClick={exportVideo}
-              disabled={isExportingVideo || slides.length < 2}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              <Film className="w-4 h-4" />
-              {isExportingVideo ? `Exporting ${exportProgress}%` : 'Export Video'}
-            </button>
+            {isExportingVideo ? (
+              <button
+                onClick={cancelExport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
+              >
+                Cancel
+              </button>
+            ) : (
+              <button
+                onClick={exportVideo}
+                disabled={slides.length < 2}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+                title={slides.length < 2 ? 'Add at least 2 slides to export' : 'Export as .webm video'}
+              >
+                <Film className="w-4 h-4" />
+                Export Video
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Export progress bar */}
+        {/* Export progress */}
         {isExportingVideo && (
           <div className="mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[10px] text-muted-foreground font-handwriting-patrick">
+                {exportStatus}
+              </p>
+              <p className="text-[10px] text-muted-foreground font-handwriting-patrick">
+                {exportProgress}%
+              </p>
+            </div>
             <Progress value={exportProgress} className="h-2" />
-            <p className="text-[10px] text-muted-foreground font-handwriting-patrick mt-1 text-center">
-              {exportProgress < 45
-                ? 'Capturing slides...'
-                : exportProgress < 95
-                ? 'Encoding video...'
-                : 'Finishing up...'}
-            </p>
           </div>
         )}
       </motion.div>
