@@ -20,17 +20,6 @@ export interface NoteCanvasProps {
   externalCanvasRef?: React.RefObject<HTMLDivElement>;
 }
 
-// Die-cut sticker filter: white outline tracing the emoji shape + soft lift shadow
-const CUTOUT_FILTER = [
-  'drop-shadow(0 0 1.5px white)',
-  'drop-shadow(0 0 3px white)',
-  'drop-shadow(1px 1px 0 white)',
-  'drop-shadow(-1px -1px 0 white)',
-  'drop-shadow(1px -1px 0 white)',
-  'drop-shadow(-1px 1px 0 white)',
-  'drop-shadow(3px 6px 5px rgba(0,0,0,0.25))',
-].join(' ');
-
 const NoteCanvas = ({
   stickers: controlledStickers,
   onStickersChange,
@@ -166,6 +155,7 @@ const NoteCanvas = ({
     if (sticker.textContent !== undefined) {
       setEditingId(sticker.instanceId);
       setEditText(sticker.textContent);
+      // Sync controls to match this text box's style
       if (sticker.textFont) setFontFamily(sticker.textFont);
       if (sticker.textSize) setFontSize(sticker.textSize);
       if (sticker.textColor) {
@@ -205,6 +195,7 @@ const NoteCanvas = ({
     commitEdit();
     setIsExporting(true);
     try {
+      // Use multiple attempts for reliability
       const dataUrl = await toPng(canvasRef.current, {
         quality: 1,
         pixelRatio: 2,
@@ -219,6 +210,7 @@ const NoteCanvas = ({
       document.body.removeChild(link);
     } catch (err) {
       console.error('Export failed:', err);
+      // Retry once
       try {
         const dataUrl = await toPng(canvasRef.current!, {
           quality: 1,
@@ -242,11 +234,6 @@ const NoteCanvas = ({
     setStickers([]);
     setEditingId(null);
   };
-
-  // Determine if a sticker should get the cutout filter:
-  // only emoji stickers (not images, not text boxes)
-  const isEmojiSticker = (s: PlacedSticker) =>
-    !!s.emoji && !s.imageUrl && s.textContent === undefined;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 w-full max-w-5xl mx-auto p-4">
@@ -322,7 +309,6 @@ const NoteCanvas = ({
             <ImageUploadPanel onAddImageSticker={addImageSticker} />
           </PopoverContent>
         </Popover>
-
         {/* Draw Sticker Button */}
         <button
           onClick={() => setIsDrawing(true)}
@@ -331,7 +317,6 @@ const NoteCanvas = ({
           <Pencil className="w-4 h-4" />
           Draw a Sticker
         </button>
-
         <div className="flex flex-row lg:flex-col gap-2">
           <button
             onClick={handleExport}
@@ -379,21 +364,16 @@ const NoteCanvas = ({
               return (layerOrder[aLayer] || 0) - (layerOrder[bLayer] || 0);
             })
             .map((sticker) => (
-              <div
-                key={sticker.instanceId}
-                onDoubleClick={() => handleStickerClick(sticker)}
-                // Apply die-cut filter only to emoji stickers, not images or text
-                style={isEmojiSticker(sticker) ? { filter: CUTOUT_FILTER } : undefined}
-              >
-                <DraggableSticker
-                  sticker={sticker}
-                  onUpdate={updateSticker}
-                  onDelete={deleteSticker}
-                  onEffects={sticker.imageUrl ? (s) => setEffectsTarget(s) : undefined}
-                  containerRef={canvasRef}
-                />
-              </div>
-            ))}
+            <div key={sticker.instanceId} onDoubleClick={() => handleStickerClick(sticker)}>
+              <DraggableSticker
+                sticker={sticker}
+                onUpdate={updateSticker}
+                onDelete={deleteSticker}
+                onEffects={sticker.imageUrl ? (s) => setEffectsTarget(s) : undefined}
+                containerRef={canvasRef}
+              />
+            </div>
+          ))}
 
           {/* Inline text editor overlay */}
           {editingId && (() => {
