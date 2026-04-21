@@ -12,19 +12,22 @@ const isHeic = (file: File): boolean =>
   file.type === 'image/heif' ||
   /\.(heic|heif)$/i.test(file.name);
 
-/** Convert HEIC/HEIF → JPEG blob via heic2any (lazy-loaded). */
-const convertHeicToBlob = async (file: File): Promise<Blob> => {
-  const heic2any = (await import('heic2any')).default as (opts: {
-    blob: Blob;
-    toType: string;
-    quality: number;
-  }) => Promise<Blob | Blob[]>;
-
-  const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-  return Array.isArray(result) ? result[0] : result;
+const resizeBitmapToDataUrl = (bitmap: ImageBitmap, maxSize = OUTPUT_MAX_SIZE): string => {
+  let { width, height } = bitmap;
+  if (width > maxSize || height > maxSize) {
+    const ratio = Math.min(maxSize / width, maxSize / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  return canvas.toDataURL('image/png');
 };
 
-const resizeToDataUrl = (img: HTMLImageElement, maxSize = OUTPUT_MAX_SIZE): string => {
+const resizeImgToDataUrl = (img: HTMLImageElement, maxSize = OUTPUT_MAX_SIZE): string => {
   let { width, height } = img;
   if (width > maxSize || height > maxSize) {
     const ratio = Math.min(maxSize / width, maxSize / height);
@@ -34,25 +37,71 @@ const resizeToDataUrl = (img: HTMLImageElement, maxSize = OUTPUT_MAX_SIZE): stri
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(img, 0, 0, width, height);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
   return canvas.toDataURL('image/png');
 };
 
-const loadImageFromBlob = (blob: Blob): Promise<HTMLImageElement> =>
-  new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(blob);
+/** Fast path: use native browser decoding via createImageBitmap */
+const tryNativeDecode = async (blob: Blob): Promise<string | null> => {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    return resizeBitmapToDataUrl(bitmap);
+  } catch {
+    return null;
+  }
+};
+
+/** Fast path: try loading via <img> element (works for HEIC in Safari 17+) */
+const tryImgDecode = (blob: Blob): Promise<string | null> =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(img);
+      URL.revokeObjectURL(url);
+      resolve(resizeImgToDataUrl(img));
     };
     img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Browser could not decode image'));
+      URL.revokeObjectURL(url);
+      resolve(null);
     };
-    img.src = objectUrl;
+    img.src = url;
   });
+
+/** Slow fallback: heic2any JS decoder */
+const heicFallback = async (file: File): Promise<string> => {
+  const heic2any = (await import('heic2any')).default as (opts: {
+    blob: Blob;
+    toType: string;
+    quality: number;
+  }) => Promise<Blob | Blob[]>;
+  const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+  const jpeg = Array.isArray(result) ? result[0] : result;
+  // Now decode the resulting JPEG natively
+  const decoded = await tryNativeDecode(jpeg) ?? await tryImgDecode(jpeg);
+  if (!decoded) throw new Error('Could not decode converted image');
+  return decoded;
+};
+
+const decodeImage = async (
+  file: File,
+  onSlowPath: () => void
+): Promise<string> => {
+  // 1. Try native decoding first (instant on modern browsers / Safari for HEIC)
+  const native = await tryNativeDecode(file);
+  if (native) return native;
+
+  // 2. Try <img> element (Safari 17+ handles HEIC this way)
+  const img = await tryImgDecode(file);
+  if (img) return img;
+
+  // 3. Only reach here for HEIC on non-Safari browsers — warn user it'll be slow
+  if (isHeic(file)) {
+    onSlowPath();
+    return heicFallback(file);
+  }
+
+  throw new Error('Browser could not decode image');
+};
 
 const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,20 +126,12 @@ const ImageUploadPanel = ({ onAddImageSticker }: ImageUploadPanelProps) => {
 
     setError(null);
     setIsLoading(true);
+    setLoadingMsg('Loading…');
 
     try {
-      let blob: Blob = file;
-
-      if (isHeic(file)) {
-        setLoadingMsg('Converting HEIC…');
-        blob = await convertHeicToBlob(file);
-      } else {
-        setLoadingMsg('Loading…');
-      }
-
-      const img = await loadImageFromBlob(blob);
-      const dataUrl = resizeToDataUrl(img);
-
+      const dataUrl = await decodeImage(file, () =>
+        setLoadingMsg('Converting… (this may take a moment)')
+      );
       setPreviewUrl(dataUrl);
       onAddImageSticker(dataUrl);
     } catch (err) {
