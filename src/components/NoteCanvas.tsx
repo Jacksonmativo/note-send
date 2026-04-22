@@ -113,6 +113,7 @@ const NoteCanvas = ({
         instanceId: `${item.id}-${Date.now()}`,
         stickerId: item.id,
         emoji: item.emoji,
+        imageUrl: item.image,
         x: randomX,
         y: randomY,
         rotation: randomTilt,

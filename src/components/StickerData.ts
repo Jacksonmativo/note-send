@@ -1,8 +1,9 @@
 export interface StickerItem {
   id: string;
   label: string;
-  emoji: string;
-  category: 'hearts' | 'flowers' | 'faces' | 'tape' | 'doodles' | 'stars' | 'food' | 'animals' | 'weather' | 'travel';
+  emoji?: string;
+  image?: string;
+  category: 'hearts' | 'flowers' | 'faces' | 'tape' | 'doodles' | 'stars' | 'food' | 'animals' | 'weather' | 'travel' | 'cutout';
 }
 
 export const STICKERS: StickerItem[] = [
@@ -101,9 +102,37 @@ export const STICKERS: StickerItem[] = [
   { id: 'travel-gift', label: 'Gift', emoji: '🎁', category: 'travel' },
   { id: 'travel-key', label: 'Key', emoji: '🔑', category: 'travel' },
   { id: 'travel-gem', label: 'Gem', emoji: '💎', category: 'travel' },
+
+  // Cutout Stickers
+  { id: 'cutout-bonjour', label: 'Bonjour', image: '/cutout-stickers/_Bonjour__ Sticker for Sale by perzy in 2024 _ Black and white stickers, French icons, Bonjour.png', category: 'cutout' },
+  { id: 'cutout-coquette', label: 'Coquette Bunny', image: '/cutout-stickers/🎀coquette bunny🎀.png', category: 'cutout' },
+  { id: 'cutout-adesivos', label: 'Adesivos', image: '/cutout-stickers/adesivos.png', category: 'cutout' },
+  { id: 'cutout-pie', label: 'Adorable Pie', image: '/cutout-stickers/Adorable Pie Decal _ Adorable Pie.png', category: 'cutout' },
+  { id: 'cutout-capture', label: 'Capture', image: '/cutout-stickers/Capture.png', category: 'cutout' },
+  { id: 'cutout-plane', label: 'Paper Plane', image: '/cutout-stickers/Cartoon Hand Painted Paper Plane, Car Drawing, Cartoon Drawing, Plane Drawing PNG Transparent Clipart Image and PSD File for Free Download.png', category: 'cutout' },
+  { id: 'cutout-love-quote', label: 'Love Quote', image: '/cutout-stickers/Cute Love Quote Stickers for Him and Special Occasions.png', category: 'cutout' },
+  { id: 'cutout-hydro', label: 'Hydro Flask', image: '/cutout-stickers/Hydro Flask Stickers _ Redbubble.png', category: 'cutout' },
+  { id: 'cutout-i-love-you', label: 'I Love You', image: '/cutout-stickers/I love you ❤️.png', category: 'cutout' },
+  { id: 'cutout-introversion', label: 'Introversion', image: '/cutout-stickers/Introversion_ Unique Perspectives.png', category: 'cutout' },
+  { id: 'cutout-music', label: 'Music Stickers', image: '/cutout-stickers/Music Stickers for Sale.png', category: 'cutout' },
+  { id: 'cutout-peach', label: 'Peach Goma', image: '/cutout-stickers/Peach Goma Biting Sticker _ Peach-goma.png', category: 'cutout' },
+  { id: 'cutout-preppy', label: 'Preppy Stickers', image: '/cutout-stickers/Pin by Whitney Angeles on Stickers _ Preppy stickers, Sticker design inspiration, Girl stickers.png', category: 'cutout' },
+  { id: 'cutout-butterfly', label: 'Butterfly', image: '/cutout-stickers/Pink Transparent Bubble Butterfly Effect Element Png And Psd  C43.png', category: 'cutout' },
+  { id: 'cutout-generic', label: 'Generic', image: '/cutout-stickers/Png.png', category: 'cutout' },
+  { id: 'cutout-shawn', label: 'Shawn Mendes', image: '/cutout-stickers/Shawn Mendes Stickers for Sale.png', category: 'cutout' },
+  { id: 'cutout-stickers', label: 'Stickers Pack', image: '/cutout-stickers/Stickers for Sale.png', category: 'cutout' },
+  { id: 'cutout-unique', label: 'Unique Decals', image: '/cutout-stickers/Unique Decal Creations.png', category: 'cutout' },
+  { id: 'cutout-beautiful', label: 'Beautiful', image: '/cutout-stickers/You Are Beautiful Sticker.png', category: 'cutout' },
+  { id: 'cutout-girl', label: 'Just a Girl', image: '/cutout-stickers/i am jus t a girl!!!!!.png', category: 'cutout' },
 ];
 
 export const STICKER_CATEGORIES = [
+  { id: 'cutout', label: '🖼️ Cutout stikers', isMain: true },
+  { id: 'emoji', label: '😊 Emojis', isMain: true },
+
+] as const;
+
+export const EMOJI_SUBCATEGORIES = [
   { id: 'hearts', label: '❤️ Hearts' },
   { id: 'flowers', label: '🌸 Flowers' },
   { id: 'faces', label: '😊 Faces' },
