@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Patrick+Hand&family=Gloria+Hallelujah&family=Indie+Flower&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Patrick+Hand&family=Gloria+Hallelujah&family=Indie+Flower&family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,24 +7,24 @@
 @layer base {
   :root {
     --background: 30 25% 92%;
-    --foreground: 220 20% 15%;
+    --foreground: 240 10% 20%;
 
     --card: 35 30% 96%;
-    --card-foreground: 220 20% 15%;
+    --card-foreground: 240 10% 20%;
 
     --popover: 35 30% 96%;
-    --popover-foreground: 220 20% 15%;
+    --popover-foreground: 240 10% 20%;
 
-    --primary: 340 65% 60%;
+    --primary: 252 73% 63%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 30 20% 85%;
-    --secondary-foreground: 220 20% 15%;
+    --secondary-foreground: 240 10% 20%;
 
     --muted: 30 15% 88%;
-    --muted-foreground: 220 10% 45%;
+    --muted-foreground: 240 10% 40%;
 
-    --accent: 215 60% 35%;
+    --accent: 340 100% 70%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
@@ -32,9 +32,9 @@
 
     --border: 30 15% 80%;
     --input: 30 15% 80%;
-    --ring: 340 65% 60%;
+    --ring: 252 73% 63%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
     --ink-blue: 215 60% 35%;
     --ink-black: 220 20% 15%;
@@ -92,8 +92,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: 'Patrick Hand', cursive;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
@@ -114,7 +113,7 @@
     font-family: 'Dancing Script', cursive;
   }
   .paper-shadow {
-    box-shadow: 
+    box-shadow:
       4px 4px 12px hsl(var(--paper-shadow) / 0.4),
       -1px -1px 4px hsl(var(--paper-shadow) / 0.1);
   }

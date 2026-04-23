@@ -18,6 +18,9 @@ export interface NoteCanvasProps {
   backgroundId?: string;
   onBackgroundChange?: (id: string) => void;
   externalCanvasRef?: React.RefObject<HTMLDivElement>;
+  inkColor?: InkColor;
+  fontFamily?: string;
+  fontSize?: number;
 }
 
 const NoteCanvas = ({
@@ -26,12 +29,12 @@ const NoteCanvas = ({
   backgroundId: controlledBgId,
   onBackgroundChange,
   externalCanvasRef,
+  inkColor: controlledInkColor = 'blue',
+  fontFamily: controlledFontFamily = 'Caveat',
+  fontSize: controlledFontSize = 24,
 }: NoteCanvasProps = {}) => {
   const internalCanvasRef = useRef<HTMLDivElement>(null);
   const canvasRef = (externalCanvasRef || internalCanvasRef) as React.RefObject<HTMLDivElement>;
-  const [inkColor, setInkColor] = useState<InkColor>('blue');
-  const [fontFamily, setFontFamily] = useState('Caveat');
-  const [fontSize, setFontSize] = useState(24);
   const [internalStickers, setInternalStickers] = useState<PlacedSticker[]>([]);
   const [internalBgId, setInternalBgId] = useState('notebook');
   const [isExporting, setIsExporting] = useState(false);
@@ -42,6 +45,9 @@ const NoteCanvas = ({
 
   const stickers = controlledStickers ?? internalStickers;
   const backgroundId = controlledBgId ?? internalBgId;
+  const inkColor = controlledInkColor;
+  const fontFamily = controlledFontFamily;
+  const fontSize = controlledFontSize;
 
   const stickersRef = useRef(stickers);
   stickersRef.current = stickers;
@@ -237,134 +243,36 @@ const NoteCanvas = ({
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-5xl mx-auto p-4">
-      {/* Side Panel */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="w-full lg:w-56 flex flex-row lg:flex-col gap-2 lg:gap-4 bg-card rounded-xl p-3 lg:p-4 paper-shadow overflow-x-auto flex-shrink-0"
+    <div className="w-full max-w-lg mx-auto">
+      <div
+        ref={canvasRef}
+        className="relative w-full aspect-[3/4] rounded-lg overflow-hidden shadow-lg border border-border"
+        style={{
+          backgroundImage: `url(${backgrounds.find(b => b.id === backgroundId)?.src || backgrounds[0].src})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+        onClick={() => { if (editingId) commitEdit(); }}
       >
-        {/* Text Controls Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
-              <Type className="w-4 h-4" />
-              Text & Fonts
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
-            <TextControls
-              inkColor={inkColor}
-              fontFamily={fontFamily}
-              fontSize={fontSize}
-              onInkChange={setInkColor}
-              onFontChange={setFontFamily}
-              onSizeChange={setFontSize}
-            />
-            <button
-              onClick={addTextBox}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity w-full mt-3"
-            >
-              <Type className="w-4 h-4" />
-              Add Text Box
-            </button>
-          </PopoverContent>
-        </Popover>
+        {/* Empty state */}
+        {stickers.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <p className="text-sm font-medium mb-1">Tap to start writing</p>
+              <p className="text-xs">Use the toolbar above to add text, stickers, and more</p>
+            </div>
+          </div>
+        )}
 
-        {/* Background Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
-              <Palette className="w-4 h-4" />
-              Backgrounds
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-72 p-3 lg:w-72" sideOffset={8}>
-            <BackgroundSelector selected={backgroundId} onSelect={setBackgroundId} />
-          </PopoverContent>
-        </Popover>
-
-        {/* Stickers Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
-              <SmilePlus className="w-4 h-4" />
-              Stickers
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
-            <StickerPanel onAddSticker={addSticker} />
-          </PopoverContent>
-        </Popover>
-
-        {/* Image Upload Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full">
-              <ImageIcon className="w-4 h-4" />
-              Upload Photo
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="bottom" align="center" className="w-[calc(100vw-2rem)] max-w-64 p-3 lg:w-64" sideOffset={8}>
-            <ImageUploadPanel onAddImageSticker={addImageSticker} />
-          </PopoverContent>
-        </Popover>
-        {/* Draw Sticker Button */}
-        <button
-          onClick={() => setIsDrawing(true)}
-          className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity whitespace-nowrap lg:w-full"
-        >
-          <Pencil className="w-4 h-4" />
-          Draw a Sticker
-        </button>
-        <div className="flex flex-row lg:flex-col gap-2">
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity disabled:opacity-50 whitespace-nowrap"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden lg:inline">{isExporting ? 'Saving...' : 'Download'}</span>
-            <span className="lg:hidden">{isExporting ? '...' : 'Save'}</span>
-          </button>
-          <button
-            onClick={handleReset}
-            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground font-handwriting-patrick text-sm hover:bg-secondary/80 transition-colors whitespace-nowrap"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span className="hidden lg:inline">Start Over</span>
-            <span className="lg:hidden">Reset</span>
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Canvas */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="flex-1 flex justify-center"
-      >
-        <div
-          ref={canvasRef}
-          className="relative w-full max-w-lg aspect-[3/4] rounded-lg overflow-hidden paper-shadow"
-          style={{
-            backgroundImage: `url(${backgrounds.find(b => b.id === backgroundId)?.src || backgrounds[0].src})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          onClick={() => { if (editingId) commitEdit(); }}
-        >
-          {/* Layer-based rendering: images → stickers → text */}
-          {[...stickers]
-            .sort((a, b) => {
-              const layerOrder = { image: 0, sticker: 1, text: 2 };
-              const aLayer = a.textContent !== undefined ? 'text' : (a.layer || (a.imageUrl ? 'image' : 'sticker'));
-              const bLayer = b.textContent !== undefined ? 'text' : (b.layer || (b.imageUrl ? 'image' : 'sticker'));
-              return (layerOrder[aLayer] || 0) - (layerOrder[bLayer] || 0);
-            })
-            .map((sticker) => (
+        {/* Layer-based rendering: images → stickers → text */}
+        {[...stickers]
+          .sort((a, b) => {
+            const layerOrder = { image: 0, sticker: 1, text: 2 };
+            const aLayer = a.textContent !== undefined ? 'text' : (a.layer || (a.imageUrl ? 'image' : 'sticker'));
+            const bLayer = b.textContent !== undefined ? 'text' : (b.layer || (b.imageUrl ? 'image' : 'sticker'));
+            return (layerOrder[aLayer] || 0) - (layerOrder[bLayer] || 0);
+          })
+          .map((sticker) => (
             <div key={sticker.instanceId} onDoubleClick={() => handleStickerClick(sticker)}>
               <DraggableSticker
                 sticker={sticker}
@@ -376,69 +284,68 @@ const NoteCanvas = ({
             </div>
           ))}
 
-          {/* Inline text editor overlay */}
-          {editingId && (() => {
-            const s = stickers.find((st) => st.instanceId === editingId);
-            if (!s) return null;
-            const currentAlign = s.textAlign || 'center';
-            return (
-              <div
-                className="absolute z-[100]"
-                style={{ left: s.x, top: s.y, transform: `rotate(${s.rotation}deg) scale(${s.scale})` }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Alignment toolbar */}
-                <div className="flex gap-1 mb-1">
-                  {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => (
-                    <button
-                      key={align}
-                      onClick={() => {
-                        setStickers((prev) =>
-                          prev.map((st) => st.instanceId === editingId ? { ...st, textAlign: align } : st)
-                        );
-                        if (align === 'center') {
-                          setEditText((prev) => prev + '\n');
-                        }
-                      }}
-                      className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
-                        currentAlign === align ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  autoFocus
-                  value={editText}
-                  placeholder="Your text here"
-                  onChange={(e) => {
-                    if (e.target.value.length <= 400) setEditText(e.target.value);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') commitEdit();
-                  }}
-                  className="min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize-x placeholder:text-muted-foreground/50"
-                  style={{
-                    fontFamily: `'${fontFamily}', cursive`,
-                    fontSize: `${fontSize}px`,
-                    color: inkCssMap[inkColor],
-                    lineHeight: '1.4',
-                    textAlign: currentAlign,
-                    width: s.textWidth ? `${s.textWidth}px` : '180px',
-                    minWidth: '120px',
-                    maxWidth: '400px',
-                  }}
-                  maxLength={400}
-                />
-                <div className="text-xs text-muted-foreground font-handwriting-patrick mt-1">
-                  {editText.length}/400 · Esc to save
-                </div>
+        {/* Inline text editor overlay */}
+        {editingId && (() => {
+          const s = stickers.find((st) => st.instanceId === editingId);
+          if (!s) return null;
+          const currentAlign = s.textAlign || 'center';
+          return (
+            <div
+              className="absolute z-[100]"
+              style={{ left: s.x, top: s.y, transform: `rotate(${s.rotation}deg) scale(${s.scale})` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Alignment toolbar */}
+              <div className="flex gap-1 mb-1">
+                {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => (
+                  <button
+                    key={align}
+                    onClick={() => {
+                      setStickers((prev) =>
+                        prev.map((st) => st.instanceId === editingId ? { ...st, textAlign: align } : st)
+                      );
+                      if (align === 'center') {
+                        setEditText((prev) => prev + '\n');
+                      }
+                    }}
+                    className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                      currentAlign === align ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                  </button>
+                ))}
               </div>
-            );
-          })()}
-        </div>
-      </motion.div>
+              <textarea
+                autoFocus
+                value={editText}
+                placeholder="Your text here"
+                onChange={(e) => {
+                  if (e.target.value.length <= 400) setEditText(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') commitEdit();
+                }}
+                className="min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize-x placeholder:text-muted-foreground/50"
+                style={{
+                  fontFamily: `'${fontFamily}', cursive`,
+                  fontSize: `${fontSize}px`,
+                  color: inkCssMap[inkColor],
+                  lineHeight: '1.4',
+                  textAlign: currentAlign,
+                  width: s.textWidth ? `${s.textWidth}px` : '180px',
+                  minWidth: '120px',
+                  maxWidth: '400px',
+                }}
+                maxLength={400}
+              />
+              <div className="text-xs text-muted-foreground mt-1">
+                {editText.length}/400 · Esc to save
+              </div>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Drawing Canvas Modal */}
       {isDrawing && (

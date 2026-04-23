@@ -19,6 +19,8 @@ export default {
         'handwriting-indie': ['Indie Flower', 'cursive'],
         'handwriting-patrick': ['Patrick Hand', 'cursive'],
         'handwriting-dancing': ['Dancing Script', 'cursive'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        heading: ['Poppins', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

@@ -1,0 +1,186 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .app { display: flex; flex-direction: column; height: 600px; overflow: hidden; }
+  .header { display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: var(--color-background-primary); border-bottom: 0.5px solid var(--color-border-tertiary); flex-shrink: 0; }
+  .header-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+  .switch-btn { padding: 5px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.2s, color 0.2s; }
+  .toolbar { display: flex; align-items: center; gap: 10px; padding: 7px 16px; border-bottom: 0.5px solid var(--color-border-tertiary); flex-wrap: wrap; flex-shrink: 0; }
+  .tool-btn { padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  .divider { width: 1px; height: 18px; background: var(--color-border-tertiary); flex-shrink: 0; }
+  .color-dot { width: 20px; height: 20px; border-radius: 50%; padding: 0; cursor: pointer; flex-shrink: 0; }
+  .canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+</style>
+
+<div class="app" id="app">
+  <div class="header">
+    <span class="header-title" id="headerTitle">✎ Exercises Page</span>
+    <button class="switch-btn" id="switchBtn" onclick="switchMode()">Switch to ∑ Maths</button>
+  </div>
+  <div class="toolbar" id="toolbar"></div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="mainCanvas"></canvas>
+  </div>
+</div>
+
+<script>
+let mode = 'writing';
+let tool = 'pen';
+let color = '#1a1a1a';
+let size = 2;
+let drawing = false;
+let last = null;
+
+const COLORS = ['#1a1a1a','#dc2626','#2563eb','#16a34a','#d97706','#7c3aed'];
+
+function getTheme() {
+  if (mode === 'math') return { bg: '#FEF9E7', text: '#7D6608', border: '#F9E79F' };
+  return { bg: '#EBF5FB', text: '#1B4F72', border: '#AED6F1' };
+}
+
+function buildToolbar() {
+  const tb = document.getElementById('toolbar');
+  const th = getTheme();
+  tb.style.background = th.bg;
+  tb.style.borderBottomColor = th.border;
+  tb.innerHTML = '';
+
+  ['pen','eraser'].forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tool-btn';
+    btn.textContent = t === 'pen' ? 'Pen' : 'Eraser';
+    btn.style.cssText = `border: 1px solid ${th.border}; color: ${th.text}; background: ${tool===t ? 'rgba(255,255,255,0.9)' : 'transparent'}; font-weight: ${tool===t ? 500 : 400};`;
+    btn.onclick = () => { tool = t; buildToolbar(); };
+    tb.appendChild(btn);
+  });
+
+  const d1 = document.createElement('div'); d1.className = 'divider'; d1.style.background = th.border; tb.appendChild(d1);
+
+  COLORS.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'color-dot';
+    btn.style.background = c;
+    btn.style.border = (color===c && tool==='pen') ? `3px solid ${th.text}` : '2px solid rgba(0,0,0,0.18)';
+    btn.onclick = () => { color = c; tool = 'pen'; buildToolbar(); };
+    tb.appendChild(btn);
+  });
+
+  const d2 = document.createElement('div'); d2.className = 'divider'; d2.style.background = th.border; tb.appendChild(d2);
+
+  const sizeLabel = document.createElement('span');
+  sizeLabel.textContent = 'Size'; sizeLabel.style.cssText = `font-size: 11px; color: ${th.text};`;
+  tb.appendChild(sizeLabel);
+
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.min = 1; slider.max = 12; slider.step = 1; slider.value = size;
+  slider.style.width = '70px';
+  slider.oninput = e => { size = Number(e.target.value); sizeOut.textContent = size; };
+  tb.appendChild(slider);
+
+  const sizeOut = document.createElement('span');
+  sizeOut.textContent = size; sizeOut.style.cssText = `font-size: 11px; color: ${th.text}; min-width: 16px;`;
+  tb.appendChild(sizeOut);
+
+  const d3 = document.createElement('div'); d3.className = 'divider'; d3.style.background = th.border; tb.appendChild(d3);
+
+  const clr = document.createElement('button');
+  clr.className = 'tool-btn';
+  clr.textContent = 'Clear';
+  clr.style.cssText = `border: 1px solid ${th.border}; color: ${th.text}; background: transparent;`;
+  clr.onclick = () => drawGrid();
+  tb.appendChild(clr);
+}
+
+function drawGrid() {
+  const canvas = document.getElementById('mainCanvas');
+  const wrap = document.getElementById('canvasWrap');
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  if (mode === 'writing') {
+    // Off-white paper background like in the image
+    ctx.fillStyle = '#fafaf8';
+    ctx.fillRect(0, 0, w, h);
+
+    const lineSpacing = 24;
+    // Thin, evenly spaced blue horizontal lines
+    ctx.strokeStyle = '#9ec8e8';
+    ctx.lineWidth = 0.7;
+    for (let y = lineSpacing; y <= h; y += lineSpacing) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    // Red margin line close to left edge (like the image ~60-70px)
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 1.2;
+    const marginX = 62;
+    ctx.beginPath(); ctx.moveTo(marginX, 0); ctx.lineTo(marginX, h); ctx.stroke();
+
+  } else {
+    // Math grid
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    const step = 28;
+    ctx.strokeStyle = '#b8cfe8'; ctx.lineWidth = 0.8;
+    for (let x = step; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y = step; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    ctx.strokeStyle = '#7aaacf'; ctx.lineWidth = 1.2;
+    for (let x = step*5; x < w; x += step*5) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y = step*5; y < h; y += step*5) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  }
+}
+
+function getXY(e) {
+  const canvas = document.getElementById('mainCanvas');
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / r.width, scaleY = canvas.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+}
+
+function startDraw(e) { e.preventDefault(); drawing = true; last = getXY(e); }
+function draw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const canvas = document.getElementById('mainCanvas');
+  const ctx = canvas.getContext('2d');
+  const pos = getXY(e);
+  ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pos.x, pos.y);
+  ctx.strokeStyle = tool === 'eraser' ? (mode === 'writing' ? '#fafaf8' : '#ffffff') : color;
+  ctx.lineWidth = tool === 'eraser' ? size * 6 : size;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+  last = pos;
+}
+function stopDraw() { drawing = false; }
+
+function switchMode() {
+  mode = mode === 'math' ? 'writing' : 'math';
+  document.getElementById('headerTitle').textContent = mode === 'math' ? '∑ Maths Canvas' : '✎ Exercises Page';
+  document.getElementById('switchBtn').textContent = mode === 'math' ? 'Switch to ✎ Exercises' : 'Switch to ∑ Maths';
+  buildToolbar();
+  drawGrid();
+}
+
+const canvas = document.getElementById('mainCanvas');
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', draw);
+canvas.addEventListener('mouseup', stopDraw);
+canvas.addEventListener('mouseleave', stopDraw);
+canvas.addEventListener('touchstart', startDraw, { passive: false });
+canvas.addEventListener('touchmove', draw, { passive: false });
+canvas.addEventListener('touchend', stopDraw);
+
+window.addEventListener('resize', () => {
+  const saved = canvas.toDataURL();
+  drawGrid();
+  const img = new Image();
+  img.onload = () => canvas.getContext('2d').drawImage(img, 0, 0);
+  img.src = saved;
+});
+
+buildToolbar();
+setTimeout(drawGrid, 10);
+</script>

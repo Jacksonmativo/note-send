@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
-import { Plus, Trash2, Film, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
-import { motion } from 'framer-motion';
 import NoteCanvas from './NoteCanvas';
+import Toolbar from './Toolbar';
+import ToolPanel from './ToolPanel';
+import SlideControls from './SlideControls';
+import BottomPanel from './BottomPanel';
 import { backgrounds } from './BackgroundSelector';
-import { Progress } from './ui/progress';
-import AudioTrimmer from './AudioTrimmer';
 import type { PlacedSticker } from './DraggableSticker';
+import type { InkColor } from './StickerData';
 
 interface SlideState {
   id: string;
@@ -33,6 +34,10 @@ const SlideEditor = () => {
     startTime: number;
     endTime: number;
   } | null>(null);
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [inkColor, setInkColor] = useState<InkColor>('blue');
+  const [fontFamily, setFontFamily] = useState('Caveat');
+  const [fontSize, setFontSize] = useState(24);
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   // Ref to allow cancelling an in-progress export
@@ -327,163 +332,148 @@ const SlideEditor = () => {
     exportCancelledRef.current = true;
   };
 
+  const handleToolSelect = (tool: string) => {
+    setActiveTool(activeTool === tool ? null : tool);
+  };
+
+  const handleAddTextBox = () => {
+    const randomX = 40 + Math.random() * 150;
+    const randomY = 60 + Math.random() * 200;
+    const id = `text-${Date.now()}`;
+    updateCurrentSlide({
+      stickers: [
+        ...currentSlide.stickers,
+        {
+          instanceId: id,
+          stickerId: 'text-box',
+          textContent: '',
+          textFont: fontFamily,
+          textColor: `hsl(${inkColor === 'blue' ? '215 60% 35%' : inkColor === 'black' ? '220 20% 15%' : inkColor === 'red' ? '0 70% 50%' : '140 50% 45%'})`,
+          textSize: fontSize,
+          textAlign: 'center' as const,
+          x: randomX,
+          y: randomY,
+          rotation: 0,
+          scale: 1,
+        },
+      ],
+    });
+    setActiveTool(null);
+  };
+
+  const handleAddSticker = (sticker: any) => {
+    const randomX = 50 + Math.random() * 200;
+    const randomY = 50 + Math.random() * 250;
+    const id = `sticker-${Date.now()}`;
+    updateCurrentSlide({
+      stickers: [
+        ...currentSlide.stickers,
+        {
+          instanceId: id,
+          stickerId: sticker.id,
+          emoji: sticker.emoji,
+          imageUrl: sticker.image,
+          x: randomX,
+          y: randomY,
+          rotation: 0,
+          scale: 1,
+        },
+      ],
+    });
+    setActiveTool(null);
+  };
+
+  const handleAddImageSticker = (imageUrl: string) => {
+    const randomX = 50 + Math.random() * 200;
+    const randomY = 50 + Math.random() * 250;
+    const id = `image-${Date.now()}`;
+    updateCurrentSlide({
+      stickers: [
+        ...currentSlide.stickers,
+        {
+          instanceId: id,
+          stickerId: 'image',
+          imageUrl,
+          x: randomX,
+          y: randomY,
+          rotation: 0,
+          scale: 1,
+        },
+      ],
+    });
+    setActiveTool(null);
+  };
+
+  const handleDrawingSave = (dataUrl: string) => {
+    handleAddImageSticker(dataUrl);
+  };
+
   return (
-    <div className="flex flex-col w-full max-w-5xl mx-auto gap-4 p-4">
-      {/* Canvas area */}
-      <NoteCanvas
-        stickers={currentSlide.stickers}
-        onStickersChange={(stickers) => updateCurrentSlide({ stickers })}
-        backgroundId={currentSlide.backgroundId}
-        onBackgroundChange={(backgroundId) => updateCurrentSlide({ backgroundId })}
-        externalCanvasRef={canvasRef}
+    <div className="flex flex-col min-h-screen">
+      {/* Toolbar */}
+      <Toolbar
+        onToolSelect={handleToolSelect}
+        activeTool={activeTool}
       />
 
-      {/* Slide strip */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-        className="bg-card rounded-xl p-3 paper-shadow"
-      >
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => goToSlide(currentIndex - 1)}
-            disabled={currentIndex === 0}
-            className="p-1 rounded-md hover:bg-accent disabled:opacity-30 transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5 text-foreground" />
-          </button>
-
-          <div
-            ref={stripRef}
-            className="flex-1 flex gap-2 overflow-x-auto py-1 px-1"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {slides.map((slide, i) => (
-              <button
-                key={slide.id}
-                onClick={() => goToSlide(i)}
-                className={`relative flex-shrink-0 w-16 h-20 rounded-md overflow-hidden border-2 transition-all hover:scale-105 group ${
-                  i === currentIndex
-                    ? 'border-primary ring-1 ring-primary shadow-md'
-                    : 'border-border hover:border-muted-foreground/50'
-                }`}
-              >
-                <img
-                  src={
-                    backgrounds.find((b) => b.id === slide.backgroundId)?.src ||
-                    backgrounds[0].src
-                  }
-                  className="w-full h-full object-cover"
-                  alt={`Slide ${i + 1}`}
-                  draggable={false}
-                />
-                <span className="absolute bottom-0 left-0 right-0 bg-foreground/70 text-background text-[10px] text-center font-handwriting-patrick">
-                  {i + 1}
-                </span>
-                {slide.stickers.length > 0 && (
-                  <span className="absolute top-0.5 left-0.5 bg-primary/80 text-primary-foreground text-[8px] rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                    {slide.stickers.length}
-                  </span>
-                )}
-                {slides.length > 1 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSlide(i);
-                    }}
-                    className="absolute top-0 right-0 w-4 h-4 bg-destructive rounded-bl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-2.5 h-2.5 text-destructive-foreground" />
-                  </button>
-                )}
-              </button>
-            ))}
-
-            {slides.length < MAX_SLIDES && (
-              <button
-                onClick={addSlide}
-                className="flex-shrink-0 w-16 h-20 rounded-md border-2 border-dashed border-border flex items-center justify-center hover:border-primary hover:bg-accent/30 transition-all"
-                title="Add slide"
-              >
-                <Plus className="w-5 h-5 text-muted-foreground" />
-              </button>
-            )}
+      {/* Main content */}
+      <div className="flex-1 px-4 py-6">
+        <div className="max-w-5xl mx-auto space-y-6">
+          {/* Canvas area */}
+          <div className="flex justify-center">
+            <NoteCanvas
+              stickers={currentSlide.stickers}
+              onStickersChange={(stickers) => updateCurrentSlide({ stickers })}
+              backgroundId={currentSlide.backgroundId}
+              onBackgroundChange={(backgroundId) => updateCurrentSlide({ backgroundId })}
+              externalCanvasRef={canvasRef}
+              inkColor={inkColor}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+            />
           </div>
 
-          <button
-            onClick={() => goToSlide(currentIndex + 1)}
-            disabled={currentIndex === slides.length - 1}
-            className="p-1 rounded-md hover:bg-accent disabled:opacity-30 transition-colors"
-          >
-            <ChevronRight className="w-5 h-5 text-foreground" />
-          </button>
+          {/* Slide controls */}
+          <SlideControls
+            slides={slides}
+            currentIndex={currentIndex}
+            onAddSlide={addSlide}
+            onDuplicate={duplicateSlide}
+            onDownloadHD={downloadHD}
+            onExportVideo={exportVideo}
+            onDeleteSlide={deleteSlide}
+            onGoToSlide={goToSlide}
+            isExportingVideo={isExportingVideo}
+            exportProgress={exportProgress}
+            exportStatus={exportStatus}
+          />
+
+          {/* Bottom panel */}
+          <BottomPanel
+            totalDuration={slides.length * 3}
+            onAudioChange={setAudioData}
+          />
         </div>
+      </div>
 
-        {/* Controls row */}
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-          <p className="text-xs text-muted-foreground font-handwriting-patrick">
-            Slide {currentIndex + 1}/{slides.length} · {slides.length * 3}s / 90s max
-          </p>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={duplicateSlide}
-              disabled={slides.length >= MAX_SLIDES}
-              className="px-2 py-1 text-xs rounded-md bg-secondary text-secondary-foreground font-handwriting-patrick hover:bg-secondary/80 disabled:opacity-50 transition-colors"
-            >
-              Duplicate
-            </button>
-            <button
-              onClick={downloadHD}
-              disabled={isExportingVideo}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[hsl(340,65%,65%)] text-white font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
-              title="Download current slide as HD PNG (1080×1920)"
-            >
-              <Download className="w-4 h-4" />
-              HD
-            </button>
-            {isExportingVideo ? (
-              <button
-                onClick={cancelExport}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
-              >
-                Cancel
-              </button>
-            ) : (
-              <button
-                onClick={exportVideo}
-                disabled={slides.length < 2}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-handwriting-patrick text-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
-                title={slides.length < 2 ? 'Add at least 2 slides to export' : 'Export as .webm video'}
-              >
-                <Film className="w-4 h-4" />
-                Export Video
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Export progress */}
-        {isExportingVideo && (
-          <div className="mt-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] text-muted-foreground font-handwriting-patrick">
-                {exportStatus}
-              </p>
-              <p className="text-[10px] text-muted-foreground font-handwriting-patrick">
-                {exportProgress}%
-              </p>
-            </div>
-            <Progress value={exportProgress} className="h-2" />
-          </div>
-        )}
-      </motion.div>
-
-      {/* Audio Trimmer */}
-      <AudioTrimmer
-        totalDuration={slides.length * 3}
-        onAudioChange={setAudioData}
+      {/* Tool panel */}
+      <ToolPanel
+        activeTool={activeTool}
+        onClose={() => setActiveTool(null)}
+        inkColor={inkColor}
+        fontFamily={fontFamily}
+        fontSize={fontSize}
+        onInkChange={setInkColor}
+        onFontChange={setFontFamily}
+        onSizeChange={setFontSize}
+        onAddTextBox={handleAddTextBox}
+        backgroundId={currentSlide.backgroundId}
+        onBackgroundChange={(id) => updateCurrentSlide({ backgroundId: id })}
+        stickers={currentSlide.stickers}
+        onStickersChange={(stickers) => updateCurrentSlide({ stickers })}
+        onAddSticker={handleAddSticker}
+        onAddImageSticker={handleAddImageSticker}
+        onDrawingSave={handleDrawingSave}
       />
     </div>
   );

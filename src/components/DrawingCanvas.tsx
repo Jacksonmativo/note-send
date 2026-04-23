@@ -105,7 +105,7 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
 
   const handleSave = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return false;
 
     // Trim transparent space and export
     const ctx = canvas.getContext('2d')!;
@@ -127,7 +127,7 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
 
     if (maxX < minX) {
       // Empty canvas
-      return;
+      return false;
     }
 
     const pad = 8;
@@ -146,6 +146,7 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
     tmpCanvas.getContext('2d')!.putImageData(trimmed, 0, 0);
 
     onSave(tmpCanvas.toDataURL('image/png'));
+    return true;
   };
 
   return (
@@ -223,6 +224,16 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
           </button>
           <button onClick={clearCanvas} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-handwriting-patrick hover:bg-muted/80 transition-colors active:scale-95">
             <Trash2 className="w-4 h-4" /> Clear
+          </button>
+          <button
+            onClick={() => {
+              if (handleSave()) {
+                onClose();
+              }
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-handwriting-patrick hover:bg-primary/90 transition-colors active:scale-95"
+          >
+            <Check className="w-4 h-4" /> Save
           </button>
         </div>
       </div>

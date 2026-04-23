@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import SlideEditor from '@/components/SlideEditor';
-import { Sparkles, Copy, Check, FileSignature } from 'lucide-react';
+import { Sparkles, FileSignature, Coffee, TextCursorInput } from 'lucide-react';
 
 const Index = () => {
   const [copied, setCopied] = useState(false);
@@ -20,44 +20,54 @@ const Index = () => {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="text-center py-6 px-4"
+        className="bg-card border-b border-border px-4 py-3"
       >
-        <h1 className="text-3xl md:text-4xl font-handwriting text-foreground flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary" />
-          Old School Notes
-          <Sparkles className="w-6 h-6 text-primary" />
-        </h1>
-        <p className="text-sm font-handwriting-patrick text-muted-foreground mt-1">
-          Write it. Stick it. Send it. ✂️📌
-        </p>
-        <Link
-          to="/sign"
-          className="inline-flex items-center gap-2 mt-2 px-4 py-1.5 rounded-lg bg-accent text-accent-foreground font-handwriting-patrick text-sm hover:opacity-90 transition-opacity"
-        >
-          <FileSignature className="w-4 h-4" />
-          Sign a Document
-        </Link>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <h1 className="text-lg font-heading font-semibold text-foreground">
+              Old School Notes
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/journal"
+              className="px-4 py-2 bg-secondary text-secondary-foreground font-medium rounded-lg hover:bg-secondary/90 transition-colors flex items-center gap-2"
+            >
+              <TextCursorInput className="w-4 h-4" />
+              Journal
+            </Link>
+            <Link
+              to="/sign"
+              className="px-4 py-2 bg-accent text-accent-foreground font-medium rounded-lg hover:bg-accent/90 transition-colors flex items-center gap-2"
+            >
+              <FileSignature className="w-4 h-4" />
+              Sign a Document
+            </Link>
+          </div>
+        </div>
       </motion.header>
 
       {/* Main */}
-      <main className="flex-1 flex items-start justify-center pb-8">
+      <main className="flex-1">
         <SlideEditor />
       </main>
 
       {/* Footer */}
-      <footer className="text-center py-3 text-xs text-muted-foreground font-handwriting-patrick">
-        <p>
-          Buy me coffee ☕ M-Pesa:{' '}
+      <footer className="bg-card border-t border-border px-4 py-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-center gap-4 text-sm text-muted-foreground">
+          <span className="font-sans">Buy me coffee ☕</span>
           <button
             onClick={copyNumber}
-            className="inline-flex items-center gap-1 font-bold text-foreground hover:text-primary transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded hover:bg-muted transition-colors"
             title="Click to copy"
           >
+            <Coffee className="w-3 h-3" />
             0702188406
-            {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+            {copied && <span className="text-green-600">✓</span>}
           </button>
-          {' '}— Jackson Mativo
-        </p>
+          <span className="font-sans">— Jackson Mativo</span>
+        </div>
       </footer>
     </div>
   );
