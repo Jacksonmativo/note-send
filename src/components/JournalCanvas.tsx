@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Download, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toPng } from 'html-to-image';
 import DraggableSticker, { type PlacedSticker } from './DraggableSticker';
 import { backgrounds } from './BackgroundSelector';
 import type { InkColor } from './StickerData';
@@ -13,6 +14,8 @@ interface JournalCanvasProps {
   inkColor?: InkColor;
   fontFamily?: string;
   fontSize?: number;
+  previewMode?: boolean;
+  onDownloadAllPages?: () => void;
 }
 
 const COLORS = ['#1a1a1a', '#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
@@ -25,15 +28,20 @@ export default function JournalCanvas({
   inkColor = 'blue',
   fontFamily = 'Caveat',
   fontSize = 24,
+  previewMode = false,
+  onDownloadAllPages,
 }: JournalCanvasProps) {
   const [mode, setMode] = useState<'writing' | 'math'>('writing');
-  const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
-  const [color, setColor] = useState('#1a1a1a');
-  const [size, setSize] = useState(2);
-  const [drawing, setDrawing] = useState(false);
-  const [lastPos, setLastPos] = useState<{ x: number; y: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const PAPER_WIDTH = 720;
+  const PAPER_HEIGHT = 1020;
+  const MIN_ZOOM = 0.7;
+  const MAX_ZOOM = 1.8;
+  const ZOOM_STEP = 0.1;
   const wrapRef = useRef<HTMLDivElement>(null);
   const stickersRef = useRef(controlledStickers);
   stickersRef.current = controlledStickers || [];
@@ -77,7 +85,7 @@ export default function JournalCanvas({
       // Thin, evenly spaced blue horizontal lines
       ctx.strokeStyle = '#9ec8e8';
       ctx.lineWidth = 0.7;
-      for (let y = lineSpacing; y <= h; y += lineSpacing) {
+      for (let y = lineSpacing * 3; y <= h; y += lineSpacing) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
       // Red margin line
@@ -90,55 +98,37 @@ export default function JournalCanvas({
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, w, h);
       const step = 28;
-      ctx.strokeStyle = '#b8cfe8'; ctx.lineWidth = 0.8;
-      for (let x = step; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-      for (let y = step; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-      ctx.strokeStyle = '#7aaacf'; ctx.lineWidth = 1.2;
-      for (let x = step*5; x < w; x += step*5) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-      for (let y = step*5; y < h; y += step*5) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      ctx.strokeStyle = '#6b7280';
+      ctx.lineWidth = 0.9;
+      for (let x = step; x < w; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = step; y < h; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
     }
   }, [mode]);
 
-  const getXY = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-
-    const r = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / r.width, scaleY = canvas.height / r.height;
-    const src = 'touches' in e ? e.touches[0] : e;
-    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  const startEdit = useCallback((sticker: PlacedSticker) => {
+    setEditingId(sticker.instanceId);
+    setEditText(sticker.textContent ?? '');
   }, []);
 
-  const startDraw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    setDrawing(true);
-    setLastPos(getXY(e));
-  }, [getXY]);
-
-  const draw = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (!drawing || !lastPos) return;
-    e.preventDefault();
-
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-
-    const pos = getXY(e);
-    ctx.beginPath();
-    ctx.moveTo(lastPos.x, lastPos.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = tool === 'eraser' ? (mode === 'writing' ? '#fafaf8' : '#ffffff') : color;
-    ctx.lineWidth = tool === 'eraser' ? size * 6 : size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-    setLastPos(pos);
-  }, [drawing, lastPos, getXY, tool, color, size, mode]);
-
-  const stopDraw = useCallback(() => {
-    setDrawing(false);
-    setLastPos(null);
-  }, []);
+  const commitEdit = useCallback(() => {
+    if (!editingId) return;
+    setStickers((prev) =>
+      prev.map((s) =>
+        s.instanceId === editingId ? { ...s, textContent: editText.slice(0, 400) } : s
+      )
+    );
+    setEditingId(null);
+  }, [editingId, editText]);
 
   const switchMode = () => {
     setMode(mode === 'math' ? 'writing' : 'math');
@@ -149,8 +139,18 @@ export default function JournalCanvas({
   };
 
   const downloadPDF = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (onDownloadAllPages) {
+      onDownloadAllPages();
+      return;
+    }
+
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    const previousTransform = wrap.style.transform;
+    wrap.style.transform = 'none';
+    const imageData = await toPng(wrap, { cacheBust: true, backgroundColor: '#ffffff' });
+    wrap.style.transform = previousTransform;
 
     // Import jsPDF dynamically
     const { jsPDF } = await import('jspdf');
@@ -161,37 +161,10 @@ export default function JournalCanvas({
       format: 'a4'
     });
 
-    // A4 dimensions in mm
     const a4Width = 210;
     const a4Height = 297;
 
-    // Calculate canvas aspect ratio and fit to A4
-    const canvasAspect = canvas.width / canvas.height;
-    const a4Aspect = a4Width / a4Height;
-
-    let drawWidth, drawHeight, offsetX, offsetY;
-
-    if (canvasAspect > a4Aspect) {
-      // Canvas is wider, fit to width
-      drawWidth = a4Width;
-      drawHeight = a4Width / canvasAspect;
-      offsetX = 0;
-      offsetY = (a4Height - drawHeight) / 2;
-    } else {
-      // Canvas is taller, fit to height
-      drawHeight = a4Height;
-      drawWidth = a4Height * canvasAspect;
-      offsetX = (a4Width - drawWidth) / 2;
-      offsetY = 0;
-    }
-
-    // Convert canvas to image
-    const imgData = canvas.toDataURL('image/png', 1.0);
-
-    // Add image to PDF
-    pdf.addImage(imgData, 'PNG', offsetX, offsetY, drawWidth, drawHeight);
-
-    // Download PDF
+    pdf.addImage(imageData, 'PNG', 0, 0, a4Width, a4Height);
     pdf.save(`journal-${Date.now()}.pdf`);
   };
 
@@ -220,9 +193,39 @@ export default function JournalCanvas({
 
   const theme = getTheme();
 
+  if (previewMode) {
+    return (
+      <div
+        ref={wrapRef}
+        className="relative overflow-hidden border border-border bg-white"
+        style={{ width: PAPER_WIDTH, height: PAPER_HEIGHT }}
+      >
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+        />
+
+        <div className="absolute inset-0 pointer-events-none">
+          {stickersRef.current.map((sticker) => (
+            <div key={sticker.instanceId} className="pointer-events-none">
+              <DraggableSticker
+                sticker={sticker}
+                onUpdate={() => undefined}
+                onDelete={() => undefined}
+                hidePlaceholder
+                showTextStretch={false}
+                showTextResize={false}
+                containerRef={wrapRef}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 bg-card border-b border-border">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-heading font-semibold">
@@ -235,7 +238,25 @@ export default function JournalCanvas({
             Switch to {mode === 'math' ? '✎ Writing' : '∑ Maths'}
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-full border border-border bg-background px-2 py-1 text-sm text-foreground">
+            <button
+              onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP))}
+              className="h-8 w-8 rounded-full border border-border bg-muted hover:bg-muted/90 transition-colors"
+              title="Zoom out"
+            >
+              −
+            </button>
+            <span className="px-3 font-medium">{Math.round(zoom * 100)}%</span>
+            <button
+              onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP))}
+              className="h-8 w-8 rounded-full border border-border bg-muted hover:bg-muted/90 transition-colors"
+              title="Zoom in"
+            >
+              +
+            </button>
+          </div>
+
           <button
             onClick={clearCanvas}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
@@ -253,97 +274,87 @@ export default function JournalCanvas({
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div
-        className="flex items-center gap-3 p-3 border-b border-border flex-wrap"
-        style={{ background: theme.bg, borderBottomColor: theme.border }}
-      >
-        {/* Tools */}
-        {(['pen', 'eraser'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTool(t)}
-            className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-            style={{
-              border: `1px solid ${theme.border}`,
-              color: theme.text,
-              background: tool === t ? 'rgba(255,255,255,0.9)' : 'transparent',
-              fontWeight: tool === t ? 500 : 400,
-            }}
-          >
-            {t === 'pen' ? 'Pen' : 'Eraser'}
-          </button>
-        ))}
-
-        <div className="w-px h-6 bg-current opacity-30" style={{ background: theme.border }} />
-
-        {/* Colors */}
-        {COLORS.map((c) => (
-          <button
-            key={c}
-            onClick={() => {
-              setColor(c);
-              setTool('pen');
-            }}
-            className="w-6 h-6 rounded-full border-2 transition-all"
-            style={{
-              background: c,
-              borderColor: (color === c && tool === 'pen') ? theme.text : 'rgba(0,0,0,0.18)',
-            }}
-          />
-        ))}
-
-        <div className="w-px h-6 bg-current opacity-30" style={{ background: theme.border }} />
-
-        {/* Size */}
-        <span className="text-sm font-medium" style={{ color: theme.text }}>Size</span>
-        <input
-          type="range"
-          min="1"
-          max="12"
-          step="1"
-          value={size}
-          onChange={(e) => setSize(Number(e.target.value))}
-          className="w-16"
-        />
-        <span className="text-sm font-medium min-w-[16px]" style={{ color: theme.text }}>{size}</span>
+      <div className="p-4 border-b border-border bg-background text-sm text-muted-foreground">
+        Use the Text, Stickers, Upload, and Draw tools above to add content to your journal.
+        <br />
+        (DO NOT CLOSE THE PAGE BEFORE SAVING YOUR WORK, as there is no auto-save feature yet!)
       </div>
 
       {/* Canvas */}
-      <div ref={wrapRef} className="flex-1 relative overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
-          onMouseDown={startDraw}
-          onMouseMove={draw}
-          onMouseUp={stopDraw}
-          onMouseLeave={stopDraw}
-          onTouchStart={startDraw}
-          onTouchMove={draw}
-          onTouchEnd={stopDraw}
-        />
+      <div className="flex-1 overflow-auto bg-slate-100/40 p-4">
+        <div
+          ref={wrapRef}
+          className="relative overflow-hidden border border-border bg-white shadow-lg"
+          style={{
+            width: PAPER_WIDTH,
+            height: PAPER_HEIGHT,
+            transform: `scale(${zoom})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+          />
 
-        {/* Stickers and Text Overlay */}
-        <div className="absolute inset-0 pointer-events-none">
-          {stickersRef.current.map((sticker) => (
-            <div key={sticker.instanceId} className="pointer-events-auto">
-              <DraggableSticker
-                sticker={sticker}
-                onUpdate={(updated) => {
-                  setStickers((prev) =>
-                    prev.map((s) => (s.instanceId === updated.instanceId ? updated : s))
-                  );
+          {/* Stickers and Text Overlay */}
+          <div className="absolute inset-0 pointer-events-none">
+            {stickersRef.current.map((sticker) => (
+              <div key={sticker.instanceId} className="pointer-events-auto">
+                <DraggableSticker
+                  sticker={sticker}
+                  onUpdate={(updated) => {
+                    setStickers((prev) =>
+                      prev.map((s) => (s.instanceId === updated.instanceId ? updated : s))
+                    );
+                  }}
+                  onDelete={(id) => {
+                    setStickers((prev) => prev.filter((s) => s.instanceId !== id));
+                  }}
+                  onDoubleClick={sticker.textContent !== undefined ? startEdit : undefined}
+                  hidePlaceholder={editingId === sticker.instanceId}
+                  showTextStretch={sticker.textContent !== undefined}
+                  showTextResize={sticker.textContent === undefined}
+                  onEffects={sticker.imageUrl ? (s) => {
+                    // Handle photo effects if needed
+                  } : undefined}
+                  containerRef={wrapRef}
+                />
+              </div>
+            ))}
+          </div>
+
+          {editingId && (() => {
+            const sticker = stickersRef.current.find((s) => s.instanceId === editingId);
+            if (!sticker) return null;
+            return (
+              <textarea
+                autoFocus
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setEditingId(null);
+                  }
                 }}
-                onDelete={(id) => {
-                  setStickers((prev) => prev.filter((s) => s.instanceId !== id));
+                className="absolute bg-transparent p-2 text-sm leading-6 outline-none"
+                style={{
+                  left: sticker.x,
+                  top: sticker.y,
+                  minWidth: '140px',
+                  width: sticker.textWidth ? `${sticker.textWidth}px` : '220px',
+                  fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
+                  fontSize: `${sticker.textSize || 24}px`,
+                  color: sticker.textColor || 'hsl(215, 60%, 35%)',
+                  textAlign: sticker.textAlign || 'center',
+                  transform: `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
+                  transformOrigin: 'top left',
                 }}
-                onEffects={sticker.imageUrl ? (s) => {
-                  // Handle photo effects if needed
-                } : undefined}
-                containerRef={wrapRef}
+                maxLength={400}
               />
-            </div>
-          ))}
+            );
+          })()}
         </div>
       </div>
     </div>

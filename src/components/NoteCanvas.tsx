@@ -162,19 +162,6 @@ const NoteCanvas = ({
     if (sticker.textContent !== undefined) {
       setEditingId(sticker.instanceId);
       setEditText(sticker.textContent);
-      // Sync controls to match this text box's style
-      if (sticker.textFont) setFontFamily(sticker.textFont);
-      if (sticker.textSize) setFontSize(sticker.textSize);
-      if (sticker.textColor) {
-        const colorToInk: Record<string, InkColor> = {
-          'hsl(215, 60%, 35%)': 'blue',
-          'hsl(220, 20%, 15%)': 'black',
-          'hsl(0, 70%, 50%)': 'red',
-          'hsl(140, 50%, 45%)': 'green',
-        };
-        const matched = colorToInk[sticker.textColor];
-        if (matched) setInkColor(matched);
-      }
     }
   }, []);
 
@@ -279,6 +266,8 @@ const NoteCanvas = ({
                 onUpdate={updateSticker}
                 onDelete={deleteSticker}
                 onEffects={sticker.imageUrl ? (s) => setEffectsTarget(s) : undefined}
+                onDoubleClick={handleStickerClick}
+                hidePlaceholder={editingId === sticker.instanceId}
                 containerRef={canvasRef}
               />
             </div>

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { X, RotateCw, Sparkles } from 'lucide-react';
+import { X, RotateCw, Sparkles, MoveHorizontal } from 'lucide-react';
 
 export type StickerLayer = 'image' | 'sticker' | 'text';
 
@@ -29,10 +29,14 @@ interface DraggableStickerProps {
   onUpdate: (updated: PlacedSticker) => void;
   onDelete: (instanceId: string) => void;
   onEffects?: (sticker: PlacedSticker) => void;
+  onDoubleClick?: (sticker: PlacedSticker) => void;
+  hidePlaceholder?: boolean;
+  showTextStretch?: boolean;
+  showTextResize?: boolean;
   containerRef: React.RefObject<HTMLDivElement>;
 }
 
-const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef }: DraggableStickerProps) => {
+const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, onDoubleClick, hidePlaceholder, showTextStretch = false, showTextResize = true, containerRef }: DraggableStickerProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, stickerX: 0, stickerY: 0 });
@@ -71,8 +75,18 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
     window.addEventListener('mouseup', handleMouseUp);
   }, [sticker, onUpdate, containerRef]);
 
+  const lastTouchTimeRef = useRef<number>(0);
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTouchTimeRef.current < 300) {
+      e.preventDefault();
+      lastTouchTimeRef.current = 0;
+      if (onDoubleClick) onDoubleClick(sticker);
+      return;
+    }
+    lastTouchTimeRef.current = now;
     const touch = e.touches[0];
     setIsDragging(true);
     dragStart.current = {
@@ -152,6 +166,52 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
     window.addEventListener('touchend', handleTouchEnd);
   }, [sticker, onUpdate]);
 
+  const handleStretchMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = sticker.textWidth ?? 180;
+    const container = containerRef.current;
+    const maxWidth = container ? Math.max(120, container.getBoundingClientRect().width - sticker.x - 20) : 1000;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const width = Math.max(100, Math.min(maxWidth, startWidth + dx * 0.6));
+      onUpdate({ ...sticker, textWidth: width });
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [sticker, onUpdate, containerRef]);
+
+  const handleStretchTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    const startX = e.touches[0].clientX;
+    const startWidth = sticker.textWidth ?? 180;
+    const container = containerRef.current;
+    const maxWidth = container ? Math.max(120, container.getBoundingClientRect().width - sticker.x - 20) : 1000;
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      moveEvent.preventDefault();
+      const dx = moveEvent.touches[0].clientX - startX;
+      const width = Math.max(100, Math.min(maxWidth, startWidth + dx * 0.6));
+      onUpdate({ ...sticker, textWidth: width });
+    };
+
+    const handleTouchEnd = () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }, [sticker, onUpdate, containerRef]);
+
   // Deselect when clicking outside
   const handleClickOutside = useCallback((e: MouseEvent | TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -183,6 +243,10 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
         touchAction: 'none',
       }}
       onMouseDown={handleMouseDown}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onDoubleClick) onDoubleClick(sticker);
+      }}
       onTouchStart={handleTouchStart}
       onClick={handleSelect}
     >
@@ -199,7 +263,7 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
             minWidth: '60px',
           }}
         >
-          {sticker.textContent || 'Double-click to edit'}
+          {hidePlaceholder ? '' : (sticker.textContent || 'Double-click to edit')}
         </div>
       ) : sticker.imageUrl ? (
         <div className={`relative photo-frame-${sticker.photoFrame || 'none'}`}>
@@ -246,6 +310,16 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
               <Sparkles className="w-3.5 h-3.5" />
             </button>
           )}
+          {sticker.textContent !== undefined && showTextStretch && (
+            <button
+              onMouseDown={handleStretchMouseDown}
+              onTouchStart={handleStretchTouchStart}
+              className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-secondary/95 border border-border flex items-center justify-center text-secondary-foreground shadow-md active:scale-95 transition-transform cursor-ew-resize"
+              title="Drag to stretch text box horizontally"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          )}
           <button
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
@@ -254,16 +328,18 @@ const DraggableSticker = ({ sticker, onUpdate, onDelete, onEffects, containerRef
           >
             <RotateCw className="w-4 h-4" />
           </button>
-          <div
-            onMouseDown={handleResizeMouseDown}
-            onTouchStart={handleResizeTouchStart}
-            className="absolute -bottom-3 -left-3 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-md cursor-nwse-resize active:scale-90 transition-transform"
-            title="Drag to resize"
-          >
+          {showTextResize && (
+            <div
+              onMouseDown={handleResizeMouseDown}
+              onTouchStart={handleResizeTouchStart}
+              className="absolute -bottom-3 -left-3 w-7 h-7 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-md cursor-nwse-resize active:scale-90 transition-transform"
+              title="Drag to resize"
+            >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M1 7H13M1 7L4 4M1 7L4 10M13 7L10 4M13 7L10 10" />
             </svg>
           </div>
+          )}
         </>
       )}
     </div>

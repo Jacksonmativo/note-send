@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Eraser, Undo2, Trash2, Check, X } from 'lucide-react';
+import { Eraser, Undo2, Redo2, Trash2, Check, X } from 'lucide-react';
 
 interface DrawingCanvasProps {
   onSave: (dataUrl: string) => void;
@@ -25,6 +25,7 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
   const [lineWidth, setLineWidth] = useState(4);
   const [isEraser, setIsEraser] = useState(false);
   const historyRef = useRef<ImageData[]>([]);
+  const redoRef = useRef<ImageData[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -61,6 +62,7 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
     canvas.setPointerCapture(e.pointerId);
     setIsDrawing(true);
     const ctx = canvas.getContext('2d')!;
+    redoRef.current = [];
     const pos = getPos(e);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
@@ -89,10 +91,21 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
   const undo = () => {
     const canvas = canvasRef.current;
     if (!canvas || historyRef.current.length <= 1) return;
-    historyRef.current.pop();
     const ctx = canvas.getContext('2d')!;
+    const current = historyRef.current.pop();
+    if (current) redoRef.current.push(current);
     const prev = historyRef.current[historyRef.current.length - 1];
     ctx.putImageData(prev, 0, 0);
+  };
+
+  const redo = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || redoRef.current.length === 0) return;
+    const ctx = canvas.getContext('2d')!;
+    const next = redoRef.current.pop();
+    if (!next) return;
+    ctx.putImageData(next, 0, 0);
+    historyRef.current.push(next);
   };
 
   const clearCanvas = () => {
@@ -221,6 +234,9 @@ const DrawingCanvas = ({ onSave, onClose }: DrawingCanvasProps) => {
         <div className="flex items-center gap-2">
           <button onClick={undo} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-handwriting-patrick hover:bg-muted/80 transition-colors active:scale-95">
             <Undo2 className="w-4 h-4" /> Undo
+          </button>
+          <button onClick={redo} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-handwriting-patrick hover:bg-muted/80 transition-colors active:scale-95">
+            <Redo2 className="w-4 h-4" /> Redo
           </button>
           <button onClick={clearCanvas} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground text-sm font-handwriting-patrick hover:bg-muted/80 transition-colors active:scale-95">
             <Trash2 className="w-4 h-4" /> Clear
