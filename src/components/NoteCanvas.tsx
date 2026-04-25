@@ -10,6 +10,7 @@ import TextControls from './TextControls';
 import BackgroundSelector, { backgrounds } from './BackgroundSelector';
 import DrawingCanvas from './DrawingCanvas';
 import PhotoEffectsPanel from './PhotoEffectsPanel';
+import CoffeePopup from './CoffeePopup';
 import type { StickerItem, InkColor } from './StickerData';
 
 export interface NoteCanvasProps {
@@ -42,6 +43,7 @@ const NoteCanvas = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [effectsTarget, setEffectsTarget] = useState<PlacedSticker | null>(null);
+  const [showCoffeePopup, setShowCoffeePopup] = useState(false);
 
   const stickers = controlledStickers ?? internalStickers;
   const backgroundId = controlledBgId ?? internalBgId;
@@ -202,6 +204,7 @@ const NoteCanvas = ({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setShowCoffeePopup(true);
     } catch (err) {
       console.error('Export failed:', err);
       // Retry once
@@ -217,6 +220,7 @@ const NoteCanvas = ({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setShowCoffeePopup(true);
       } catch (retryErr) {
         console.error('Export retry failed:', retryErr);
       }
@@ -358,6 +362,9 @@ const NoteCanvas = ({
           onClose={() => setEffectsTarget(null)}
         />
       )}
+
+      {/* Coffee Popup */}
+      <CoffeePopup isOpen={showCoffeePopup} onClose={() => setShowCoffeePopup(false)} />
     </div>
   );
 };

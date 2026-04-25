@@ -5,6 +5,7 @@ import Toolbar from './Toolbar';
 import ToolPanel from './ToolPanel';
 import SlideControls from './SlideControls';
 import BottomPanel from './BottomPanel';
+import CoffeePopup from './CoffeePopup';
 import { backgrounds } from './BackgroundSelector';
 import type { PlacedSticker } from './DraggableSticker';
 import type { InkColor } from './StickerData';
@@ -38,6 +39,7 @@ const SlideEditor = () => {
   const [inkColor, setInkColor] = useState<InkColor>('blue');
   const [fontFamily, setFontFamily] = useState('Caveat');
   const [fontSize, setFontSize] = useState(24);
+  const [showCoffeePopup, setShowCoffeePopup] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   // Ref to allow cancelling an in-progress export
@@ -115,6 +117,7 @@ const SlideEditor = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      setShowCoffeePopup(true);
     } catch (err) {
       console.error('HD download failed:', err);
     }
@@ -446,6 +449,8 @@ const SlideEditor = () => {
             isExportingVideo={isExportingVideo}
             exportProgress={exportProgress}
             exportStatus={exportStatus}
+            showCoffeePopup={showCoffeePopup}
+            onCoffeePopupClose={() => setShowCoffeePopup(false)}
           />
 
           {/* Bottom panel */}

@@ -24,10 +24,7 @@ const Index = () => {
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            <h1 className="text-lg font-heading font-semibold text-foreground">
-              Old School Notes
-            </h1>
+            <img src="/favicon-48x48.png.png" alt="Old School Notes" className="h-20 w-auto" />
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -42,7 +39,7 @@ const Index = () => {
               className="px-4 py-2 bg-accent text-accent-foreground font-medium rounded-lg hover:bg-accent/90 transition-colors flex items-center gap-2"
             >
               <FileSignature className="w-4 h-4" />
-              Sign a Document
+              Sign a Doc
             </Link>
           </div>
         </div>

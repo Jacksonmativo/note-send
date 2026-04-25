@@ -1,6 +1,7 @@
 import { Plus, Copy, Download, Film, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { backgrounds } from './BackgroundSelector';
+import CoffeePopup from './CoffeePopup';
 
 interface SlideControlsProps {
   slides: any[];
@@ -14,6 +15,8 @@ interface SlideControlsProps {
   isExportingVideo: boolean;
   exportProgress: number;
   exportStatus: string;
+  showCoffeePopup?: boolean;
+  onCoffeePopupClose?: () => void;
 }
 
 export default function SlideControls({
@@ -28,9 +31,13 @@ export default function SlideControls({
   isExportingVideo,
   exportProgress,
   exportStatus,
+  showCoffeePopup = false,
+  onCoffeePopupClose,
 }: SlideControlsProps) {
   return (
-    <motion.div
+    <>
+      <CoffeePopup isOpen={showCoffeePopup} onClose={onCoffeePopupClose || (() => {})} />
+      <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.1 }}
@@ -151,5 +158,6 @@ export default function SlideControls({
         </div>
       )}
     </motion.div>
+    </>
   );
 }
