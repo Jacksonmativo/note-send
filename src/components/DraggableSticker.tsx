@@ -104,6 +104,11 @@ const DraggableSticker = ({
   showTextResize = true,
   containerRef,
 }: DraggableStickerProps) => {
+  // Guard against undefined sticker
+  if (!sticker) {
+    return null;
+  }
+
   const [isDragging, setIsDragging] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, stickerX: 0, stickerY: 0 });
@@ -161,7 +166,7 @@ const DraggableSticker = ({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [sticker.x, sticker.y, onUpdate, clampPos]
+    [sticker, onUpdate, clampPos]
   );
 
   /* ── Touch drag ── */
@@ -243,7 +248,7 @@ const DraggableSticker = ({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [sticker.scale, onUpdate]
+    [sticker, onUpdate]
   );
 
   const handleResizeTouchStart = useCallback(
@@ -264,7 +269,7 @@ const DraggableSticker = ({
       window.addEventListener('touchmove', handleTouchMove, { passive: false });
       window.addEventListener('touchend', handleTouchEnd);
     },
-    [sticker.scale, onUpdate]
+    [sticker, onUpdate]
   );
 
   /* ── Text width stretch ── */

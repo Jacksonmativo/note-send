@@ -46,6 +46,7 @@ const JournalPage = () => {
   const [mode, setMode]             = useState<'writing' | 'math'>('writing');
   const [zoom, setZoom]             = useState(1);
   const [showCoffeePopup, setShowCoffeePopup] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [pages, setPages] = useState<Array<{ id: string; stickers: PlacedSticker[] }>>([
     { id: 'page-1', stickers: [] },
@@ -65,7 +66,6 @@ const JournalPage = () => {
     const updateZoom = () => {
       const w = window.innerWidth;
       if (w < 768) {
-        // leave 16px padding each side
         setZoom(Math.max(MIN_ZOOM, (w - 32) / PAPER_WIDTH));
       } else {
         setZoom(1);
@@ -78,19 +78,47 @@ const JournalPage = () => {
 
   /* ── PDF export ─────────────────────────────────────── */
   const downloadAllPages = useCallback(async () => {
+    setIsExporting(true);
+
+    // Wait a tick for the hidden preview nodes to render fully
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     const images: string[] = [];
+
     for (let i = 0; i < pages.length; i++) {
       const node = hiddenPageRefs.current[i];
       if (!node) continue;
+
+      // Capture twice — first pass warms up font/image cache, second is clean
+      await toPng(node, {
+        quality: 1,
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
+        width: PAPER_WIDTH,
+        height: PAPER_HEIGHT,
+        style: {
+          transform: 'none',
+          transformOrigin: 'unset',
+        },
+      }).catch(() => null); // discard warm-up
+
       const img = await toPng(node, {
         quality: 1,
         pixelRatio: 2,
-        skipAutoScale: true,
         cacheBust: true,
-        backgroundColor: '#ffffff',
+        backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
+        width: PAPER_WIDTH,
+        height: PAPER_HEIGHT,
+        style: {
+          transform: 'none',
+          transformOrigin: 'unset',
+        },
       });
+
       images.push(img);
     }
+
     const { jsPDF } = await import('jspdf');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     images.forEach((image, i) => {
@@ -98,8 +126,10 @@ const JournalPage = () => {
       pdf.addImage(image, 'PNG', 0, 0, 210, 297);
     });
     pdf.save(`journal-${Date.now()}.pdf`);
+
+    setIsExporting(false);
     setShowCoffeePopup(true);
-  }, [pages]);
+  }, [pages, mode]);
 
   /* ── Page management ────────────────────────────────── */
   const updateCurrentPageStickers = useCallback(
@@ -211,11 +241,6 @@ const JournalPage = () => {
     setActiveTool(null);
   };
 
-  /* ─────────────────────────────────────────────────────
-     Layout
-     h-screen → fixed viewport height, no page scroll
-     flex-col  → stack header / mode-bar / canvas / (fixed bottom)
-  ───────────────────────────────────────────────────── */
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
 
@@ -227,7 +252,6 @@ const JournalPage = () => {
         className="shrink-0 bg-card border-b border-border px-3 py-2 z-10"
       >
         <div className="flex items-center justify-between gap-2">
-          {/* Left: back + title */}
           <div className="flex items-center gap-2 min-w-0">
             <Link
               to="/"
@@ -242,7 +266,6 @@ const JournalPage = () => {
             </h1>
           </div>
 
-          {/* Right: page nav + add page + sign */}
           <div className="flex items-center gap-1.5">
             <div className="flex items-center rounded-full border border-border bg-background">
               <button
@@ -284,10 +307,8 @@ const JournalPage = () => {
         </div>
       </motion.header>
 
-      {/* ══ 2. Mode + Zoom card  ═══════════════════════════════
-              Lives ABOVE the tool bar, BELOW the header           */}
+      {/* ══ 2. Mode + Zoom card ════════════════════════════════ */}
       <div className="shrink-0 bg-card border-b border-border px-3 py-2 flex items-center justify-between gap-3 z-10">
-        {/* Mode label + switch */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold truncate">
             {mode === 'math' ? '∑ Maths Journal' : '✎ Writing Journal'}
@@ -301,7 +322,6 @@ const JournalPage = () => {
           </button>
         </div>
 
-        {/* Zoom controls */}
         <div className="flex items-center gap-1 rounded-full border border-border bg-background px-1.5 py-1 shrink-0">
           <button
             onClick={() =>
@@ -330,14 +350,9 @@ const JournalPage = () => {
       {/* ══ 3. Canvas area ═════════════════════════════════════ */}
       <main
         className="flex-1 min-h-0 overflow-auto bg-slate-100/50"
-        /* pad bottom to never hide behind fixed toolbar + panel */
         style={{ paddingBottom: activeTool ? '300px' : '76px' }}
       >
         <div className="p-3 sm:p-5">
-          {/*
-            Outer div reserves the SCALED dimensions in document flow,
-            so scroll area matches the actual visible canvas size.
-          */}
           <div
             className="mx-auto"
             style={{
@@ -359,18 +374,30 @@ const JournalPage = () => {
         </div>
       </main>
 
-      {/* ══ Hidden pages for multi-page PDF export ════════════ */}
-      <div aria-hidden className="sr-only">
+      {/* ══ Hidden pages for multi-page PDF export ════════════
+          These must NOT be display:none or visibility:hidden —
+          html-to-image requires the nodes to be rendered.
+          We position them far off-screen instead.           */}
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          left: -99999,
+          top: 0,
+          width: PAPER_WIDTH,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      >
         {pages.map((page, index) => (
           <div
             key={page.id}
             ref={(el) => { hiddenPageRefs.current[index] = el; }}
             style={{
-              position: 'absolute',
-              left: -9999,
-              top: 0,
-              width: PAPER_WIDTH,
-              height: PAPER_HEIGHT,
+              width:    PAPER_WIDTH,
+              height:   PAPER_HEIGHT,
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
             <JournalCanvas
@@ -390,7 +417,6 @@ const JournalPage = () => {
       {/* ══ 4. Fixed bottom: tool panel + toolbar ═════════════ */}
       <div className="fixed bottom-0 inset-x-0 z-40">
 
-        {/* Tool panel — slides up when a tool is active */}
         <AnimatePresence>
           {activeTool && (
             <motion.div
@@ -402,7 +428,6 @@ const JournalPage = () => {
               className="bg-card border-t border-border shadow-2xl overflow-y-auto"
               style={{ maxHeight: '44vh' }}
             >
-              {/* Close row */}
               <div className="flex items-center justify-between px-4 pt-3 pb-1">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {activeTool === 'text'     && 'Add journal text'}
@@ -487,18 +512,19 @@ const JournalPage = () => {
               );
             })}
 
-            {/* Divider */}
             <div className="w-px bg-border my-2 shrink-0" />
 
-            {/* Download PDF — in toolbar */}
+            {/* Download PDF */}
             <button
               onClick={downloadAllPages}
+              disabled={isExporting}
               className="flex-1 flex flex-col items-center justify-center gap-0.5
                          rounded-2xl px-2 py-2 text-xs font-medium
-                         text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                         text-muted-foreground hover:text-foreground hover:bg-muted
+                         transition-colors disabled:opacity-50 disabled:cursor-wait"
             >
               <Download className="w-5 h-5" />
-              <span className="leading-tight">PDF</span>
+              <span className="leading-tight">{isExporting ? '…' : 'PDF'}</span>
             </button>
           </div>
         </div>
