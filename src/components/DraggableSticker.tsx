@@ -35,6 +35,8 @@ interface DraggableStickerProps {
   showTextStretch?: boolean;
   showTextResize?: boolean;
   containerRef: React.RefObject<HTMLDivElement>;
+  /** Current canvas zoom level — used to convert screen px → paper px */
+  zoom?: number;
 }
 
 /* ── Highlight colours cycling ── */
@@ -53,8 +55,7 @@ function HandHighlight({ color, width, height }: { color: string; width: number;
   const fill = HIGHLIGHT_CSS[color] ?? 'transparent';
   if (fill === 'transparent') return null;
 
-  // Build an irregular polygon that looks like a human highlight stroke
-  const seed = color.charCodeAt(0); // deterministic wobble per colour
+  const seed = color.charCodeAt(0);
   const wobble = (i: number, amp: number) =>
     Math.sin(i * 3.7 + seed) * amp + Math.cos(i * 2.1 + seed) * amp * 0.5;
 
@@ -103,11 +104,9 @@ const DraggableSticker = ({
   showTextStretch = false,
   showTextResize = true,
   containerRef,
+  zoom = 1,
 }: DraggableStickerProps) => {
-  // Guard against undefined sticker
-  if (!sticker) {
-    return null;
-  }
+  if (!sticker) return null;
 
   const [isDragging, setIsDragging] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
@@ -115,20 +114,25 @@ const DraggableSticker = ({
   const stickerRef = useRef(sticker);
   stickerRef.current = sticker;
   const elemRef = useRef<HTMLDivElement>(null);
+  // Keep a live ref to zoom so event handlers always read the latest value
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
 
-  /* ── Free-edge drag helpers ── */
+  /* ── Clamp position to container bounds (paper-space coords) ── */
   const clampPos = useCallback(
     (rawX: number, rawY: number) => {
       const container = containerRef.current;
       if (!container) return { x: rawX, y: rawY };
+      // Container's client rect is in screen px; convert to paper px via zoom
       const rect = container.getBoundingClientRect();
+      const paperW = rect.width  / zoomRef.current;
+      const paperH = rect.height / zoomRef.current;
       const elem = elemRef.current;
-      // Use the element's own rendered size so items can go right to the edge
-      const w = elem ? elem.offsetWidth * sticker.scale : 0;
+      const w = elem ? elem.offsetWidth  * sticker.scale : 0;
       const h = elem ? elem.offsetHeight * sticker.scale : 0;
       return {
-        x: Math.max(-w * 0.5, Math.min(rect.width - w * 0.5, rawX)),
-        y: Math.max(-h * 0.5, Math.min(rect.height - h * 0.5, rawY)),
+        x: Math.max(-w * 0.5, Math.min(paperW - w * 0.5, rawX)),
+        y: Math.max(-h * 0.5, Math.min(paperH - h * 0.5, rawY)),
       };
     },
     [containerRef, sticker.scale]
@@ -148,8 +152,9 @@ const DraggableSticker = ({
       };
 
       const handleMouseMove = (e: MouseEvent) => {
-        const dx = e.clientX - dragStart.current.x;
-        const dy = e.clientY - dragStart.current.y;
+        // Divide screen-pixel delta by zoom → paper-space delta
+        const dx = (e.clientX - dragStart.current.x) / zoomRef.current;
+        const dy = (e.clientY - dragStart.current.y) / zoomRef.current;
         const { x, y } = clampPos(
           dragStart.current.stickerX + dx,
           dragStart.current.stickerY + dy
@@ -195,8 +200,9 @@ const DraggableSticker = ({
       const handleTouchMove = (e: TouchEvent) => {
         e.preventDefault();
         const t = e.touches[0];
-        const dx = t.clientX - dragStart.current.x;
-        const dy = t.clientY - dragStart.current.y;
+        // Divide screen-pixel delta by zoom → paper-space delta
+        const dx = (t.clientX - dragStart.current.x) / zoomRef.current;
+        const dy = (t.clientY - dragStart.current.y) / zoomRef.current;
         const { x, y } = clampPos(
           dragStart.current.stickerX + dx,
           dragStart.current.stickerY + dy
@@ -237,7 +243,7 @@ const DraggableSticker = ({
       const startX = e.clientX;
       const startScale = sticker.scale;
       const handleMouseMove = (e: MouseEvent) => {
-        const dx = e.clientX - startX;
+        const dx = (e.clientX - startX) / zoomRef.current;
         const newScale = Math.max(0.3, Math.min(3, startScale + dx / 100));
         onUpdate({ ...stickerRef.current, scale: newScale });
       };
@@ -258,7 +264,7 @@ const DraggableSticker = ({
       const startScale = sticker.scale;
       const handleTouchMove = (e: TouchEvent) => {
         e.preventDefault();
-        const dx = e.touches[0].clientX - startX;
+        const dx = (e.touches[0].clientX - startX) / zoomRef.current;
         const newScale = Math.max(0.3, Math.min(3, startScale + dx / 100));
         onUpdate({ ...stickerRef.current, scale: newScale });
       };
@@ -281,10 +287,10 @@ const DraggableSticker = ({
       const startWidth = sticker.textWidth ?? 180;
       const container = containerRef.current;
       const maxWidth = container
-        ? Math.max(120, container.getBoundingClientRect().width - sticker.x - 20)
+        ? Math.max(120, container.getBoundingClientRect().width / zoomRef.current - sticker.x - 20)
         : 1000;
       const handleMouseMove = (moveEvent: MouseEvent) => {
-        const dx = moveEvent.clientX - startX;
+        const dx = (moveEvent.clientX - startX) / zoomRef.current;
         const width = Math.max(100, Math.min(maxWidth, startWidth + dx * 0.6));
         onUpdate({ ...stickerRef.current, textWidth: width });
       };
@@ -305,11 +311,11 @@ const DraggableSticker = ({
       const startWidth = sticker.textWidth ?? 180;
       const container = containerRef.current;
       const maxWidth = container
-        ? Math.max(120, container.getBoundingClientRect().width - sticker.x - 20)
+        ? Math.max(120, container.getBoundingClientRect().width / zoomRef.current - sticker.x - 20)
         : 1000;
       const handleTouchMove = (moveEvent: TouchEvent) => {
         moveEvent.preventDefault();
-        const dx = moveEvent.touches[0].clientX - startX;
+        const dx = (moveEvent.touches[0].clientX - startX) / zoomRef.current;
         const width = Math.max(100, Math.min(maxWidth, startWidth + dx * 0.6));
         onUpdate({ ...stickerRef.current, textWidth: width });
       };
@@ -345,9 +351,7 @@ const DraggableSticker = ({
   const showControls = isSelected && !isDragging;
   const hlColor = sticker.textHighlight ?? 'none';
 
-  /* ── Derived text box dimensions for the SVG highlight ── */
-  const textBoxWidth = sticker.textWidth ?? 180;
-  // Approx line-height × lines; SVG fills the full div height anyway
+  const textBoxWidth  = sticker.textWidth ?? 180;
   const textBoxHeight = (sticker.textSize ?? 24) * 1.6;
 
   return (
@@ -372,24 +376,22 @@ const DraggableSticker = ({
       onClick={handleSelect}
     >
       {sticker.textContent !== undefined ? (
-        <div className="relative px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words"
+        <div
+          className="relative px-2 py-1 select-none pointer-events-none whitespace-pre-wrap break-words"
           style={{
             fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
-            fontSize: `${sticker.textSize || 24}px`,
-            color: sticker.textColor || 'hsl(215, 60%, 35%)',
+            fontSize:   `${sticker.textSize || 24}px`,
+            color:      sticker.textColor || 'hsl(215, 60%, 35%)',
             lineHeight: '1.4',
-            textAlign: sticker.textAlign || 'center',
-            width: sticker.textWidth ? `${sticker.textWidth}px` : '180px',
-            minWidth: '60px',
+            textAlign:  sticker.textAlign || 'center',
+            width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
+            minWidth:   '60px',
           }}
         >
-          {/* Hand-drawn highlight rendered behind text */}
-          <HandHighlight
-            color={hlColor}
-            width={textBoxWidth}
-            height={textBoxHeight}
-          />
-          <span className="relative">{hidePlaceholder ? '' : (sticker.textContent || 'Double-click to edit')}</span>
+          <HandHighlight color={hlColor} width={textBoxWidth} height={textBoxHeight} />
+          <span className="relative">
+            {hidePlaceholder ? '' : (sticker.textContent || 'Double-click to edit')}
+          </span>
         </div>
       ) : sticker.imageUrl ? (
         <div className={`relative photo-frame-${sticker.photoFrame || 'none'}`}>
@@ -441,7 +443,7 @@ const DraggableSticker = ({
             </button>
           )}
 
-          {/* Highlight cycle button — only for text stickers */}
+          {/* Highlight cycle — text stickers only */}
           {sticker.textContent !== undefined && (
             <button
               onMouseDown={(e) => e.stopPropagation()}
@@ -449,10 +451,7 @@ const DraggableSticker = ({
               onClick={cycleHighlight}
               title="Cycle highlight colour"
               className="absolute -top-3 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-card flex items-center justify-center shadow-md active:scale-90 transition-transform border border-border"
-              style={{
-                background:
-                  hlColor !== 'none' ? HIGHLIGHT_CSS[hlColor] : undefined,
-              }}
+              style={{ background: hlColor !== 'none' ? HIGHLIGHT_CSS[hlColor] : undefined }}
             >
               <Highlighter className="w-3.5 h-3.5 text-foreground" />
             </button>

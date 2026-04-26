@@ -24,7 +24,7 @@ const Index = () => {
       >
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/favicon-48x48.png.png" alt="Old School Notes" className="h-20 w-auto" />
+            <img src="/favicon-48x48.png" alt="Old School Notes" className="h-20 w-auto" />
           </div>
           <div className="flex items-center gap-2">
             <Link

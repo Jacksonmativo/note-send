@@ -44,6 +44,7 @@ const JournalPage = () => {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isDrawing, setIsDrawing]   = useState(false);
   const [mode, setMode]             = useState<'writing' | 'math'>('writing');
+  // Always default to 100% zoom — no mobile auto-shrink
   const [zoom, setZoom]             = useState(1);
   const [showCoffeePopup, setShowCoffeePopup] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -58,30 +59,16 @@ const JournalPage = () => {
   const [fontFamily, setFontFamily]     = useState('Caveat');
   const [fontSize, setFontSize]         = useState(24);
 
+  const hiddenContainerRef = useRef<HTMLDivElement>(null);
   const hiddenPageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const currentPage    = pages[currentPageIndex];
-
-  /* ── Auto-fit zoom on mobile ────────────────────────── */
-  useEffect(() => {
-    const updateZoom = () => {
-      const w = window.innerWidth;
-      if (w < 768) {
-        setZoom(Math.max(MIN_ZOOM, (w - 32) / PAPER_WIDTH));
-      } else {
-        setZoom(1);
-      }
-    };
-    updateZoom();
-    window.addEventListener('resize', updateZoom);
-    return () => window.removeEventListener('resize', updateZoom);
-  }, []);
 
   /* ── PDF export ─────────────────────────────────────── */
   const downloadAllPages = useCallback(async () => {
     setIsExporting(true);
 
-    // Wait a tick for the hidden preview nodes to render fully
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Wait for the hidden preview nodes to render fully
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
     const images: string[] = [];
 
@@ -89,7 +76,7 @@ const JournalPage = () => {
       const node = hiddenPageRefs.current[i];
       if (!node) continue;
 
-      // Capture twice — first pass warms up font/image cache, second is clean
+      // Warm-up pass
       await toPng(node, {
         quality: 1,
         pixelRatio: 2,
@@ -97,12 +84,9 @@ const JournalPage = () => {
         backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
         width: PAPER_WIDTH,
         height: PAPER_HEIGHT,
-        style: {
-          transform: 'none',
-          transformOrigin: 'unset',
-        },
-      }).catch(() => null); // discard warm-up
+      }).catch(() => null);
 
+      // Real capture pass
       const img = await toPng(node, {
         quality: 1,
         pixelRatio: 2,
@@ -110,10 +94,6 @@ const JournalPage = () => {
         backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
         width: PAPER_WIDTH,
         height: PAPER_HEIGHT,
-        style: {
-          transform: 'none',
-          transformOrigin: 'unset',
-        },
       });
 
       images.push(img);
@@ -375,18 +355,20 @@ const JournalPage = () => {
       </main>
 
       {/* ══ Hidden pages for multi-page PDF export ════════════
-          These must NOT be display:none or visibility:hidden —
-          html-to-image requires the nodes to be rendered.
-          We position them far off-screen instead.           */}
+          Rendered off-screen at exact paper dimensions with no
+          transform/zoom so html-to-image captures pixel-perfect
+          positions matching what the user sees on canvas.      */}
       <div
+        ref={hiddenContainerRef}
         aria-hidden
         style={{
-          position: 'fixed',
-          left: -99999,
-          top: 0,
-          width: PAPER_WIDTH,
+          position:      'absolute',
+          left:          -99999,
+          top:           0,
+          width:         PAPER_WIDTH,
           pointerEvents: 'none',
-          zIndex: -1,
+          zIndex:        -1,
+          overflow:      'hidden',
         }}
       >
         {pages.map((page, index) => (
@@ -394,10 +376,13 @@ const JournalPage = () => {
             key={page.id}
             ref={(el) => { hiddenPageRefs.current[index] = el; }}
             style={{
+              position: 'relative',
               width:    PAPER_WIDTH,
               height:   PAPER_HEIGHT,
-              position: 'relative',
               overflow: 'hidden',
+              // Ensure no inherited transform skews the capture
+              transform:       'none',
+              transformOrigin: 'top left',
             }}
           >
             <JournalCanvas

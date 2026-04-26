@@ -228,16 +228,22 @@ export default function JournalCanvas({
      PREVIEW MODE
      Pure CSS grid + static HTML stickers — no canvas —
      so html-to-image captures every element correctly.
+     All positions are in paper-space (px) with no zoom
+     applied — this matches how coordinates are stored.
   ══════════════════════════════════════════════════════ */
   if (previewMode) {
     return (
       <div
         style={{
-          position:   'relative',
-          width:      PAPER_WIDTH,
-          height:     PAPER_HEIGHT,
-          overflow:   'hidden',
-          background: mode === 'writing' ? '#fafaf8' : '#ffffff',
+          position:        'relative',
+          width:           PAPER_WIDTH,
+          height:          PAPER_HEIGHT,
+          overflow:        'hidden',
+          background:      mode === 'writing' ? '#fafaf8' : '#ffffff',
+          // Explicitly zero out any inherited transform so the capture
+          // coordinate space matches the stored sticker x/y values exactly.
+          transform:       'none',
+          transformOrigin: 'top left',
         }}
       >
         {/* CSS grid lines — no canvas needed, fully captured by html-to-image */}
@@ -250,6 +256,8 @@ export default function JournalCanvas({
               position:        'absolute',
               left:            sticker.x,
               top:             sticker.y,
+              // Apply only the sticker's own rotation/scale — NOT the page zoom.
+              // Sticker x/y are stored in paper-space coordinates so this is correct.
               transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
               transformOrigin: 'top left',
               userSelect:      'none',
@@ -366,6 +374,7 @@ export default function JournalCanvas({
               showTextStretch={sticker.textContent !== undefined}
               showTextResize={sticker.textContent === undefined}
               containerRef={wrapRef}
+              zoom={zoom}
             />
           </div>
         ))}
