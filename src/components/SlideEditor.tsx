@@ -518,4 +518,5 @@ const SlideEditor = () => {
   );
 };
 
+
 export default SlideEditor;
