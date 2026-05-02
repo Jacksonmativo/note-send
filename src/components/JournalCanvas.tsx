@@ -77,13 +77,13 @@ function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
           <div
             key={y}
             style={{
-              position:        'absolute',
-              left:            0,
-              top:             y,
-              width:           '100%',
-              height:          0,
-              borderTop:       '0.7px solid #9ec8e8',
-              pointerEvents:   'none',
+              position:      'absolute',
+              left:          0,
+              top:           y,
+              width:         '100%',
+              height:        0,
+              borderTop:     '0.7px solid #9ec8e8',
+              pointerEvents: 'none',
             }}
           />
         ))}
@@ -156,6 +156,8 @@ export default function JournalCanvas({
 }: JournalCanvasProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText,  setEditText]  = useState('');
+  const [clickedId, setClickedId] = useState<string | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
@@ -212,12 +214,18 @@ export default function JournalCanvas({
     setEditText(sticker.textContent ?? '');
   }, []);
 
+  const handleSingleClick = useCallback((id: string) => {
+    setClickedId(id);
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => setClickedId(null), 800);
+  }, []);
+
   const commitEdit = useCallback(() => {
     if (!editingId) return;
     setStickers((prev) =>
       prev.map((s) =>
         s.instanceId === editingId
-          ? { ...s, textContent: editText.slice(0, 400) }
+          ? { ...s, textContent: editText.slice(0, 2000) }
           : s
       )
     );
@@ -240,8 +248,6 @@ export default function JournalCanvas({
           height:          PAPER_HEIGHT,
           overflow:        'hidden',
           background:      mode === 'writing' ? '#fafaf8' : '#ffffff',
-          // Explicitly zero out any inherited transform so the capture
-          // coordinate space matches the stored sticker x/y values exactly.
           transform:       'none',
           transformOrigin: 'top left',
         }}
@@ -256,8 +262,6 @@ export default function JournalCanvas({
               position:        'absolute',
               left:            sticker.x,
               top:             sticker.y,
-              // Apply only the sticker's own rotation/scale — NOT the page zoom.
-              // Sticker x/y are stored in paper-space coordinates so this is correct.
               transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
               transformOrigin: 'top left',
               userSelect:      'none',
@@ -336,17 +340,25 @@ export default function JournalCanvas({
      INTERACTIVE MODE
   ══════════════════════════════════════════════════════ */
   return (
-    <div
-      ref={wrapRef}
-      className="relative border border-border bg-white shadow-lg"
-      style={{
-        width:           PAPER_WIDTH,
-        height:          PAPER_HEIGHT,
-        transform:       `scale(${zoom})`,
-        transformOrigin: 'top left',
-        overflow:        'visible',
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes fadeOutBorder {
+          0%   { opacity: 1; }
+          60%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+      <div
+        ref={wrapRef}
+        className="relative border border-border bg-white shadow-lg"
+        style={{
+          width:           PAPER_WIDTH,
+          height:          PAPER_HEIGHT,
+          transform:       `scale(${zoom})`,
+          transformOrigin: 'top left',
+          overflow:        'visible',
+        }}
+      >
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
@@ -358,7 +370,26 @@ export default function JournalCanvas({
         style={{ inset: 0, overflow: 'visible' }}
       >
         {stickersRef.current.map((sticker) => (
-          <div key={sticker.instanceId} className="pointer-events-auto">
+          <div
+            key={sticker.instanceId}
+            className="pointer-events-auto"
+            onClick={sticker.textContent !== undefined ? () => handleSingleClick(sticker.instanceId) : undefined}
+            style={{ position: 'relative', display: 'inline-block' }}
+          >
+            {/* Temporary blue focus ring on single click */}
+            {clickedId === sticker.instanceId && editingId !== sticker.instanceId && (
+              <div
+                style={{
+                  position:      'absolute',
+                  inset:         -4,
+                  border:        '2px solid #3b82f6',
+                  borderRadius:  6,
+                  boxShadow:     '0 0 0 3px rgba(59,130,246,0.25)',
+                  pointerEvents: 'none',
+                  animation:     'fadeOutBorder 0.8s ease forwards',
+                }}
+              />
+            )}
             <DraggableSticker
               sticker={sticker}
               onUpdate={(updated) =>
@@ -384,29 +415,52 @@ export default function JournalCanvas({
         const sticker = stickersRef.current.find((s) => s.instanceId === editingId);
         if (!sticker) return null;
         return (
-          <textarea
-            autoFocus
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null); }}
-            className="absolute bg-transparent p-2 text-sm leading-6 outline-none resize-none"
+          /* Wrapper div owns position + transform so the counter rotates with the textarea */
+          <div
+            className="absolute"
             style={{
               left:            sticker.x,
               top:             sticker.y,
-              minWidth:        '140px',
-              width:           sticker.textWidth ? `${sticker.textWidth}px` : '220px',
-              fontFamily:      `'${sticker.textFont || 'Caveat'}', cursive`,
-              fontSize:        `${sticker.textSize || 24}px`,
-              color:           sticker.textColor || 'hsl(215, 60%, 35%)',
-              textAlign:       sticker.textAlign || 'center',
               transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
               transformOrigin: 'top left',
             }}
-            maxLength={400}
-          />
+          >
+            <textarea
+              autoFocus
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null); }}
+              className="bg-transparent p-2 leading-6 outline-none resize-none block"
+              style={{
+                minWidth:   '140px',
+                width:      sticker.textWidth ? `${sticker.textWidth}px` : '220px',
+                fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
+                fontSize:   `${sticker.textSize || 24}px`,
+                color:      sticker.textColor || 'hsl(215, 60%, 35%)',
+                textAlign:  sticker.textAlign || 'center',
+              }}
+              maxLength={2000}
+            />
+            {/* Character counter */}
+            <div
+              style={{
+                textAlign:    'right',
+                fontSize:     '11px',
+                color:        '#9ca3af',
+                lineHeight:   1,
+                paddingRight: '2px',
+                marginTop:    '2px',
+                userSelect:   'none',
+                pointerEvents:'none',
+              }}
+            >
+              {editText.length} / 2000
+            </div>
+          </div>
         );
       })()}
     </div>
+    </>
   );
 }

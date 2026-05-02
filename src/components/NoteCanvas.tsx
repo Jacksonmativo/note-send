@@ -249,7 +249,6 @@ const NoteCanvas = ({
         {stickers.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
-              <p className="text-sm font-medium mb-1">Tap to start writing</p>
               <p className="text-xs">Use the toolbar above to add text, stickers, and more</p>
             </div>
           </div>

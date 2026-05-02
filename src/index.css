@@ -96,36 +96,31 @@
 }
 
 @layer components {
-  /* ✅ GLOBAL BUTTON FIX (this replaces ALL green buttons) */
+  /* ✅ GLOBAL BUTTON FIX (white button with blue text, light border, diagonal shading, floating feel) */
   .bg-accent,
   .bg-secondary,
   button.bg-accent,
   button.bg-secondary {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--gradient-start)),
-      hsl(var(--gradient-end))
-    ) !important;
-
-    color: white !important;
-    border: none;
+    background: hsl(0 0% 100%) !important;
+    color: hsl(var(--primary)) !important;
+    border: 1px solid hsl(210 90% 85%) !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 10px 22px rgba(28, 67, 150, 0.12), 0 2px 6px rgba(255, 255, 255, 0.9) inset;
+    background-image: linear-gradient(135deg, rgba(227, 244, 255, 0.45), rgba(255, 255, 255, 0.95) 35%, rgba(255, 255, 255, 0.9) 100%);
+    background-clip: padding-box;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
   }
 
   .bg-accent:hover,
   .bg-secondary:hover {
-    background: linear-gradient(
-      135deg,
-      hsl(var(--gradient-start) / 0.9),
-      hsl(var(--gradient-end) / 0.9)
-    ) !important;
-
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    border-color: hsl(210 95% 75%) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px rgba(28, 67, 150, 0.16);
   }
 
   .bg-accent:active,
   .bg-secondary:active {
-    transform: scale(0.97);
+    transform: translateY(-1px) scale(0.985);
   }
 }
 
@@ -135,7 +130,7 @@
   .font-handwriting-indie { font-family: 'Indie Flower', cursive; }
   .font-handwriting-patrick { font-family: 'Patrick Hand', cursive; }
   .font-handwriting-dancing { font-family: 'Dancing Script', cursive; }
-  
+
 
   .paper-shadow {
     box-shadow:

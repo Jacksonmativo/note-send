@@ -4,7 +4,7 @@ import NoteCanvas from './NoteCanvas';
 import Toolbar from './Toolbar';
 import ToolPanel from './ToolPanel';
 import SlideControls from './SlideControls';
-import BottomPanel from './BottomPanel';
+import AudioTrimmer from './AudioTrimmer';
 import CoffeePopup from './CoffeePopup';
 import { backgrounds } from './BackgroundSelector';
 import type { PlacedSticker } from './DraggableSticker';
@@ -293,11 +293,11 @@ const SlideEditor = () => {
           setExportProgress(45 + Math.round((frame / totalFrames) * 50));
 
           frame++;
-          setTimeout(drawFrame, FRAME_MS);
+          requestAnimationFrame(drawFrame);
         };
 
         // Kick off with a small initial delay so the recorder is fully ready
-        setTimeout(drawFrame, 100);
+       requestAnimationFrame(drawFrame);
       });
 
       // ── Phase 5: stop recording + download ─────────────────────────────
@@ -453,11 +453,14 @@ const SlideEditor = () => {
             onCoffeePopupClose={() => setShowCoffeePopup(false)}
           />
 
-          {/* Bottom panel */}
-          <BottomPanel
-            totalDuration={slides.length * 3}
-            onAudioChange={setAudioData}
-          />
+          <div className="bg-card border-t border-border px-4 py-4">
+            <div className="max-w-5xl mx-auto">
+              <AudioTrimmer
+                totalDuration={slides.length * 3}
+                onAudioChange={setAudioData}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

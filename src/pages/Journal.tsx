@@ -291,14 +291,14 @@ const JournalPage = () => {
       <div className="shrink-0 bg-card border-b border-border px-3 py-2 flex items-center justify-between gap-3 z-10">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold truncate">
-            {mode === 'math' ? '∑ Maths Journal' : '✎ Writing Journal'}
+            {mode === 'math' ? '∑ Chacked Journal' : '✎ Writing Journal'}
           </span>
           <button
             onClick={() => setMode((m) => (m === 'math' ? 'writing' : 'math'))}
             className="shrink-0 rounded-full bg-accent text-accent-foreground px-3 py-1
                        text-xs font-medium hover:bg-accent/90 transition-colors"
           >
-            {mode === 'math' ? '✎ Writing' : '∑ Maths'}
+            {mode === 'math' ? '✎ Writing' : '∑ Checked journal'}
           </button>
         </div>
 

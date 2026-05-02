@@ -25,7 +25,9 @@ const TextControls = ({
 
       {/* Ink Colors */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground font-handwriting-patrick">Ink Color</span>
+        <span className="text-xs text-muted-foreground font-handwriting-patrick">
+          Ink Color
+        </span>
         <div className="flex gap-2">
           {INK_COLORS.map((c) => {
             const colorMap: Record<string, string> = {
@@ -34,12 +36,15 @@ const TextControls = ({
               red: 'hsl(0, 70%, 50%)',
               green: 'hsl(140, 60%, 30%)',
             };
+
             return (
               <button
                 key={c.id}
                 onClick={() => onInkChange(c.id)}
                 className={`w-7 h-7 rounded-full border-2 transition-all ${
-                  inkColor === c.id ? 'border-foreground scale-110' : 'border-border'
+                  inkColor === c.id
+                    ? 'border-foreground scale-110'
+                    : 'border-border'
                 }`}
                 style={{ background: colorMap[c.id] }}
                 title={c.label}
@@ -49,15 +54,19 @@ const TextControls = ({
         </div>
       </div>
 
-      {/* Fonts */}
+      {/* Fonts (Horizontal Layout) */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground font-handwriting-patrick">Font</span>
-        <div className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground font-handwriting-patrick">
+          Font
+        </span>
+
+        {/* Option 1: Wrap nicely */}
+        <div className="flex flex-wrap gap-2">
           {FONT_OPTIONS.map((f) => (
             <button
               key={f.id}
               onClick={() => onFontChange(f.id)}
-              className={`px-3 py-1 rounded-md text-sm text-left transition-all ${f.className} ${
+              className={`px-3 py-1 rounded-md text-sm transition-all whitespace-nowrap ${f.className} ${
                 fontFamily === f.id
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -67,11 +76,17 @@ const TextControls = ({
             </button>
           ))}
         </div>
+
+        {/* 👉 If you prefer scroll instead of wrap, replace the div above with this:
+        <div className="flex gap-2 overflow-x-auto pb-1">
+        */}
       </div>
 
       {/* Size */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground font-handwriting-patrick">Size</span>
+        <span className="text-xs text-muted-foreground font-handwriting-patrick">
+          Size
+        </span>
         <input
           type="range"
           min={16}
