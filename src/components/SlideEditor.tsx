@@ -22,6 +22,27 @@ const TRANSITION_MS = 500;
 const FPS = 60;
 const FRAME_MS = 1000 / FPS;
 
+// Draw an image centered and contained (no stretch) within the canvas,
+// filling any leftover area with black letterbox bars.
+const drawContain = (
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  canvasW: number,
+  canvasH: number
+) => {
+  const scale = Math.min(canvasW / img.naturalWidth, canvasH / img.naturalHeight);
+  const drawW = img.naturalWidth * scale;
+  const drawH = img.naturalHeight * scale;
+  const offsetX = (canvasW - drawW) / 2;
+  const offsetY = (canvasH - drawH) / 2;
+
+  // Fill background (letterbox / pillarbox bars)
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+};
+
 const SlideEditor = () => {
   const [slides, setSlides] = useState<SlideState[]>([
     { id: `slide-${Date.now()}`, stickers: [], backgroundId: 'notebook' },
@@ -227,16 +248,21 @@ const SlideEditor = () => {
       // that slide, then `transFrames` frames crossfading into the next.
       // The last slide only holds — no trailing transition.
       //
-      // We pace each frame with setTimeout(fn, FRAME_MS) which gives the
+      // We pace each frame with requestAnimationFrame which gives the
       // canvas.captureStream() enough time to pull each drawn frame before
       // we overwrite it, producing a smooth, gap-free video track.
 
       const holdFrames = Math.round((SLIDE_DURATION_MS - TRANSITION_MS) / FRAME_MS);
       const transFrames = Math.round(TRANSITION_MS / FRAME_MS);
       const totalSlides = loadedImages.length;
-      // Total frame count
+
+      // Each slide occupies:
+      //   holdFrames  (show current slide)
+      // + transFrames (crossfade to next)    ← only for slides 0..N-2
+      // The last slide has no outgoing transition.
+      const slotWidth = holdFrames + transFrames; // frames per slide (except last)
       const totalFrames =
-        totalSlides * holdFrames + (totalSlides - 1) * transFrames;
+        (totalSlides - 1) * slotWidth + holdFrames; // last slide: hold only
 
       await new Promise<void>((resolve, reject) => {
         let frame = 0;
@@ -252,10 +278,11 @@ const SlideEditor = () => {
             return;
           }
 
-          // Determine which slide and phase we're in.
-          // Each "slot" is holdFrames + transFrames wide, except the last
-          // slide which is only holdFrames wide.
-          const slotWidth = holdFrames + transFrames;
+          // ── Slot decode ──────────────────────────────────────────────────
+          // slideIndex: which slide is "current" for this frame
+          // frameInSlot: how many frames into this slide's slot we are
+          //
+          // Clamp slideIndex so the last hold-only frames don't overflow.
           const slideIndex = Math.min(
             Math.floor(frame / slotWidth),
             totalSlides - 1
@@ -270,22 +297,22 @@ const SlideEditor = () => {
           ctx.clearRect(0, 0, offscreen.width, offscreen.height);
 
           if (frameInSlot < holdFrames || !nextImg) {
-            // ── Hold phase: show current slide only ──
-            ctx.drawImage(curImg, 0, 0, offscreen.width, offscreen.height);
+            // ── Hold phase: show current slide only ──────────────────────
+            drawContain(ctx, curImg, offscreen.width, offscreen.height);
           } else {
-            // ── Transition phase: crossfade current → next ──
+            // ── Transition phase: crossfade current → next ───────────────
+            // rawT goes 0→1 across the transFrames window
             const rawT = (frameInSlot - holdFrames) / transFrames;
             const alpha = easeInOut(Math.min(rawT, 1));
 
-            // Draw current slide at full opacity
+            // Draw current slide at full opacity first (background layer)
             ctx.globalAlpha = 1;
-            ctx.drawImage(curImg, 0, 0, offscreen.width, offscreen.height);
+            drawContain(ctx, curImg, offscreen.width, offscreen.height);
 
-            // Draw next slide on top with increasing opacity
+            // Overlay next slide with increasing opacity
             ctx.globalAlpha = alpha;
-            ctx.drawImage(nextImg, 0, 0, offscreen.width, offscreen.height);
+            drawContain(ctx, nextImg, offscreen.width, offscreen.height);
 
-            // Reset alpha
             ctx.globalAlpha = 1;
           }
 
@@ -293,11 +320,15 @@ const SlideEditor = () => {
           setExportProgress(45 + Math.round((frame / totalFrames) * 50));
 
           frame++;
-          requestAnimationFrame(drawFrame);
+
+          // Use setTimeout instead of rAF so frames are paced at exactly
+          // FRAME_MS intervals — this keeps captureStream() in sync and
+          // prevents dropped or duplicated frames in the recording.
+          setTimeout(drawFrame, FRAME_MS);
         };
 
-        // Kick off with a small initial delay so the recorder is fully ready
-       requestAnimationFrame(drawFrame);
+        // Small initial delay to ensure the recorder is fully started
+        setTimeout(drawFrame, FRAME_MS);
       });
 
       // ── Phase 5: stop recording + download ─────────────────────────────
