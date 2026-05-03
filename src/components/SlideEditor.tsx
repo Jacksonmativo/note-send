@@ -14,16 +14,15 @@ interface SlideState {
   id: string;
   stickers: PlacedSticker[];
   backgroundId: string;
+  durationMs: number;
 }
 
 const MAX_SLIDES = 30;
-const SLIDE_DURATION_MS = 3000;
+const DEFAULT_DURATION_MS = 3000;
 const TRANSITION_MS = 500;
-const FPS = 60;
+const FPS = 30;
 const FRAME_MS = 1000 / FPS;
 
-// Draw an image centered and contained (no stretch) within the canvas,
-// filling any leftover area with black letterbox bars.
 const drawContain = (
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -35,17 +34,182 @@ const drawContain = (
   const drawH = img.naturalHeight * scale;
   const offsetX = (canvasW - drawW) / 2;
   const offsetY = (canvasH - drawH) / 2;
-
-  // Fill background (letterbox / pillarbox bars)
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvasW, canvasH);
-
   ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
 };
 
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+const easeInOut = (t: number) =>
+  t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+// Reusable stepper + dot-track for a single duration value
+function DurationStepper({
+  durationMs,
+  onChange,
+}: {
+  durationMs: number;
+  onChange: (ms: number) => void;
+}) {
+  const seconds = durationMs / 1000;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <button
+        onClick={() => onChange(Math.max(1000, durationMs - 1000))}
+        disabled={durationMs <= 1000}
+        style={{
+          width: '26px', height: '26px', borderRadius: '6px',
+          border: '1px solid hsl(var(--border))',
+          background: durationMs <= 1000 ? 'transparent' : 'hsl(var(--accent))',
+          cursor: durationMs <= 1000 ? 'not-allowed' : 'pointer',
+          opacity: durationMs <= 1000 ? 0.3 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '15px', fontWeight: 700, color: 'hsl(var(--foreground))', flexShrink: 0,
+        }}
+      >−</button>
+
+      <span style={{
+        minWidth: '36px', textAlign: 'center', fontSize: '13px', fontWeight: 700,
+        background: 'hsl(215 60% 50% / 0.12)', color: 'hsl(215 60% 40%)',
+        borderRadius: '6px', padding: '3px 7px',
+      }}>
+        {seconds}s
+      </span>
+
+      <button
+        onClick={() => onChange(Math.min(5000, durationMs + 1000))}
+        disabled={durationMs >= 5000}
+        style={{
+          width: '26px', height: '26px', borderRadius: '6px',
+          border: '1px solid hsl(var(--border))',
+          background: durationMs >= 5000 ? 'transparent' : 'hsl(var(--accent))',
+          cursor: durationMs >= 5000 ? 'not-allowed' : 'pointer',
+          opacity: durationMs >= 5000 ? 0.3 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '15px', fontWeight: 700, color: 'hsl(var(--foreground))', flexShrink: 0,
+        }}
+      >+</button>
+
+      <div style={{ display: 'flex', gap: '4px' }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <button
+            key={s}
+            onClick={() => onChange(s * 1000)}
+            title={`${s}s`}
+            style={{
+              width: '7px', height: '7px', borderRadius: '50%',
+              border: 'none', cursor: 'pointer', padding: 0,
+              background: seconds >= s ? 'hsl(215 60% 50%)' : 'hsl(var(--border))',
+              transition: 'background 0.15s',
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SlideDurationPicker({
+  timingMode,
+  globalDurationMs,
+  currentSlideIndex,
+  totalSlides,
+  currentSlideDurationMs,
+  onTimingModeChange,
+  onGlobalDurationChange,
+  onCurrentSlideDurationChange,
+}: {
+  timingMode: 'equal' | 'custom';
+  globalDurationMs: number;
+  currentSlideIndex: number;
+  totalSlides: number;
+  currentSlideDurationMs: number;
+  onTimingModeChange: (mode: 'equal' | 'custom') => void;
+  onGlobalDurationChange: (ms: number) => void;
+  onCurrentSlideDurationChange: (ms: number) => void;
+}) {
+  return (
+    <div style={{
+      background: 'hsl(var(--card))',
+      border: '1px solid hsl(var(--border))',
+      borderRadius: '10px',
+      overflow: 'hidden',
+      userSelect: 'none',
+    }}>
+      {/* Header row with toggle */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        padding: '10px 16px',
+        borderBottom: '1px solid hsl(var(--border))',
+      }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.55, flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.85 }}>
+          Slide timing
+        </span>
+
+        {/* Toggle pill */}
+        <div style={{
+          display: 'flex', marginLeft: 'auto',
+          background: 'hsl(var(--muted))',
+          borderRadius: '8px', padding: '3px', gap: '2px',
+        }}>
+          {(['equal', 'custom'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => onTimingModeChange(mode)}
+              style={{
+                padding: '4px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 600,
+                transition: 'all 0.15s',
+                background: timingMode === mode ? 'hsl(215 60% 50%)' : 'transparent',
+                color: timingMode === mode ? '#fff' : 'hsl(var(--muted-foreground))',
+              }}
+            >
+              {mode === 'equal' ? '⏱ Equal' : '✦ Custom'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '12px 16px' }}>
+        {timingMode === 'equal' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '12px', opacity: 0.6, whiteSpace: 'nowrap' }}>All slides</span>
+            <DurationStepper durationMs={globalDurationMs} onChange={onGlobalDurationChange} />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.6, whiteSpace: 'nowrap', minWidth: '72px' }}>
+                Slide {currentSlideIndex + 1} / {totalSlides}
+              </span>
+              <DurationStepper
+                durationMs={currentSlideDurationMs}
+                onChange={onCurrentSlideDurationChange}
+              />
+            </div>
+            <p style={{ margin: 0, fontSize: '11px', opacity: 0.4, lineHeight: 1.4 }}>
+              Navigate to each slide to set its duration individually.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const SlideEditor = () => {
   const [slides, setSlides] = useState<SlideState[]>([
-    { id: `slide-${Date.now()}`, stickers: [], backgroundId: 'notebook' },
+    { id: `slide-${Date.now()}`, stickers: [], backgroundId: 'notebook', durationMs: DEFAULT_DURATION_MS },
   ]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isExportingVideo, setIsExportingVideo] = useState(false);
@@ -61,9 +225,10 @@ const SlideEditor = () => {
   const [fontFamily, setFontFamily] = useState('Caveat');
   const [fontSize, setFontSize] = useState(24);
   const [showCoffeePopup, setShowCoffeePopup] = useState(false);
+  const [timingMode, setTimingMode] = useState<'equal' | 'custom'>('equal');
+  const [globalDurationMs, setGlobalDurationMs] = useState(DEFAULT_DURATION_MS);
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
-  // Ref to allow cancelling an in-progress export
   const exportCancelledRef = useRef(false);
 
   const currentSlide = slides[currentIndex];
@@ -83,6 +248,7 @@ const SlideEditor = () => {
       id: `slide-${Date.now()}`,
       stickers: [],
       backgroundId: currentSlide?.backgroundId || 'notebook',
+      durationMs: currentSlide?.durationMs ?? DEFAULT_DURATION_MS,
     };
     setSlides((prev) => [...prev, newSlide]);
     setCurrentIndex(slides.length);
@@ -100,6 +266,7 @@ const SlideEditor = () => {
         instanceId: `${s.instanceId}-dup-${Date.now()}`,
       })),
       backgroundId: currentSlide.backgroundId,
+      durationMs: currentSlide.durationMs,
     };
     const newSlides = [...slides];
     newSlides.splice(currentIndex + 1, 0, dup);
@@ -123,7 +290,6 @@ const SlideEditor = () => {
     if (index >= 0 && index < slides.length) setCurrentIndex(index);
   };
 
-  // HD PNG download of current slide
   const downloadHD = async () => {
     if (!canvasRef.current) return;
     try {
@@ -144,7 +310,6 @@ const SlideEditor = () => {
     }
   };
 
-  // Load an HTMLImageElement from a data URL
   const loadImg = (src: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
       const img = new Image();
@@ -153,12 +318,6 @@ const SlideEditor = () => {
       img.src = src;
     });
 
-  // Ease-in-out curve for smooth crossfades
-  const easeInOut = (t: number) =>
-    t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-
-  // Video export: frame-by-frame deterministic loop so MediaRecorder
-  // captures every frame at the correct time.
   const exportVideo = async () => {
     if (!canvasRef.current || slides.length < 2) return;
 
@@ -171,16 +330,11 @@ const SlideEditor = () => {
     const originalIndex = currentIndex;
 
     try {
-      // ── Phase 1: render each slide to PNG ──────────────────────────────
       for (let i = 0; i < slides.length; i++) {
         if (exportCancelledRef.current) throw new Error('cancelled');
-
         setCurrentIndex(i);
         setExportProgress(Math.round((i / slides.length) * 40));
-
-        // Wait for React to re-render the canvas with the new slide
         await new Promise((r) => setTimeout(r, 400));
-
         const dataUrl = await toPng(canvasRef.current!, {
           quality: 1,
           pixelRatio: 2,
@@ -193,23 +347,19 @@ const SlideEditor = () => {
       setExportProgress(42);
       setExportStatus('Loading images...');
 
-      // ── Phase 2: pre-load all captured PNGs into Image elements ────────
       const loadedImages = await Promise.all(images.map(loadImg));
-
       if (exportCancelledRef.current) throw new Error('cancelled');
 
       setExportProgress(45);
       setExportStatus('Encoding video...');
 
-      // ── Phase 3: set up off-screen canvas + MediaRecorder ──────────────
       const offscreen = document.createElement('canvas');
-      offscreen.width = 1080;
+      offscreen.width  = 1080;
       offscreen.height = 1920;
       const ctx = offscreen.getContext('2d')!;
 
       const stream = offscreen.captureStream(FPS);
 
-      // Attach audio track if provided
       let audioCtx: AudioContext | null = null;
       if (audioData) {
         audioCtx = new AudioContext();
@@ -232,9 +382,7 @@ const SlideEditor = () => {
       });
 
       const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
       const videoPromise = new Promise<Blob>((resolve) => {
         recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
@@ -242,105 +390,58 @@ const SlideEditor = () => {
 
       recorder.start();
 
-      // ── Phase 4: frame-by-frame draw loop ──────────────────────────────
-      //
-      // Strategy: for each slide we draw `holdFrames` frames showing only
-      // that slide, then `transFrames` frames crossfading into the next.
-      // The last slide only holds — no trailing transition.
-      //
-      // We pace each frame with requestAnimationFrame which gives the
-      // canvas.captureStream() enough time to pull each drawn frame before
-      // we overwrite it, producing a smooth, gap-free video track.
-
-      const holdFrames = Math.round((SLIDE_DURATION_MS - TRANSITION_MS) / FRAME_MS);
-      const transFrames = Math.round(TRANSITION_MS / FRAME_MS);
       const totalSlides = loadedImages.length;
 
-      // Each slide occupies:
-      //   holdFrames  (show current slide)
-      // + transFrames (crossfade to next)    ← only for slides 0..N-2
-      // The last slide has no outgoing transition.
-      const slotWidth = holdFrames + transFrames; // frames per slide (except last)
-      const totalFrames =
-        (totalSlides - 1) * slotWidth + holdFrames; // last slide: hold only
+      for (let i = 0; i < totalSlides; i++) {
+        if (exportCancelledRef.current) throw new Error('cancelled');
 
-      await new Promise<void>((resolve, reject) => {
-        let frame = 0;
+        const curImg  = loadedImages[i];
+        const nextImg = i < totalSlides - 1 ? loadedImages[i + 1] : null;
+        // Per-slide hold = user-chosen duration minus the transition overlap
+        const holdMs  = Math.max(200, (slides[i]?.durationMs ?? DEFAULT_DURATION_MS) - TRANSITION_MS);
 
-        const drawFrame = () => {
-          if (exportCancelledRef.current) {
-            reject(new Error('cancelled'));
-            return;
-          }
-
-          if (frame >= totalFrames) {
-            resolve();
-            return;
-          }
-
-          // ── Slot decode ──────────────────────────────────────────────────
-          // slideIndex: which slide is "current" for this frame
-          // frameInSlot: how many frames into this slide's slot we are
-          //
-          // Clamp slideIndex so the last hold-only frames don't overflow.
-          const slideIndex = Math.min(
-            Math.floor(frame / slotWidth),
-            totalSlides - 1
-          );
-          const frameInSlot = frame - slideIndex * slotWidth;
-          const isLastSlide = slideIndex === totalSlides - 1;
-
-          const curImg = loadedImages[slideIndex];
-          const nextImg = !isLastSlide ? loadedImages[slideIndex + 1] : null;
-
+        // Hold phase
+        const holdStart = performance.now();
+        while (performance.now() - holdStart < holdMs) {
+          if (exportCancelledRef.current) throw new Error('cancelled');
           ctx.globalAlpha = 1;
-          ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+          drawContain(ctx, curImg, offscreen.width, offscreen.height);
+          await nextFrame();
+        }
 
-          if (frameInSlot < holdFrames || !nextImg) {
-            // ── Hold phase: show current slide only ──────────────────────
-            drawContain(ctx, curImg, offscreen.width, offscreen.height);
-          } else {
-            // ── Transition phase: crossfade current → next ───────────────
-            // rawT goes 0→1 across the transFrames window
-            const rawT = (frameInSlot - holdFrames) / transFrames;
-            const alpha = easeInOut(Math.min(rawT, 1));
+        // Transition phase (skip on last slide)
+        if (nextImg) {
+          const transStart = performance.now();
+          while (true) {
+            const elapsed = performance.now() - transStart;
+            const rawT    = Math.min(elapsed / TRANSITION_MS, 1);
+            const alpha   = easeInOut(rawT);
 
-            // Draw current slide at full opacity first (background layer)
             ctx.globalAlpha = 1;
             drawContain(ctx, curImg, offscreen.width, offscreen.height);
-
-            // Overlay next slide with increasing opacity
             ctx.globalAlpha = alpha;
             drawContain(ctx, nextImg, offscreen.width, offscreen.height);
-
             ctx.globalAlpha = 1;
+
+            await nextFrame();
+            if (rawT >= 1) break;
+            if (exportCancelledRef.current) throw new Error('cancelled');
           }
+        }
 
-          // Update progress bar (45 → 95%)
-          setExportProgress(45 + Math.round((frame / totalFrames) * 50));
+        setExportProgress(45 + Math.round(((i + 1) / totalSlides) * 50));
+      }
 
-          frame++;
-
-          // Use setTimeout instead of rAF so frames are paced at exactly
-          // FRAME_MS intervals — this keeps captureStream() in sync and
-          // prevents dropped or duplicated frames in the recording.
-          setTimeout(drawFrame, FRAME_MS);
-        };
-
-        // Small initial delay to ensure the recorder is fully started
-        setTimeout(drawFrame, FRAME_MS);
-      });
-
-      // ── Phase 5: stop recording + download ─────────────────────────────
       recorder.stop();
       if (audioCtx) audioCtx.close();
+
       setExportProgress(95);
       setExportStatus('Finishing up...');
 
       const blob = await videoPromise;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
       a.download = `slideshow-${Date.now()}.webm`;
       document.body.appendChild(a);
       a.click();
@@ -350,6 +451,7 @@ const SlideEditor = () => {
       setExportProgress(100);
       setExportStatus('Done!');
       await new Promise((r) => setTimeout(r, 800));
+
     } catch (err: unknown) {
       if (err instanceof Error && err.message !== 'cancelled') {
         console.error('Video export failed:', err);
@@ -364,6 +466,20 @@ const SlideEditor = () => {
 
   const cancelExport = () => {
     exportCancelledRef.current = true;
+  };
+
+  // When switching to equal mode, stamp the current globalDuration onto all slides
+  const handleTimingModeChange = (mode: 'equal' | 'custom') => {
+    setTimingMode(mode);
+    if (mode === 'equal') {
+      setSlides((prev) => prev.map((s) => ({ ...s, durationMs: globalDurationMs })));
+    }
+  };
+
+  // When global duration changes, update all slides immediately
+  const handleGlobalDurationChange = (ms: number) => {
+    setGlobalDurationMs(ms);
+    setSlides((prev) => prev.map((s) => ({ ...s, durationMs: ms })));
   };
 
   const handleToolSelect = (tool: string) => {
@@ -444,16 +560,13 @@ const SlideEditor = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Toolbar */}
       <Toolbar
         onToolSelect={handleToolSelect}
         activeTool={activeTool}
       />
 
-      {/* Main content */}
       <div className="flex-1 px-4 py-6">
         <div className="max-w-5xl mx-auto space-y-6">
-          {/* Canvas area */}
           <div className="flex justify-center">
             <NoteCanvas
               stickers={currentSlide.stickers}
@@ -467,7 +580,17 @@ const SlideEditor = () => {
             />
           </div>
 
-          {/* Slide controls */}
+          <SlideDurationPicker
+            timingMode={timingMode}
+            globalDurationMs={globalDurationMs}
+            currentSlideIndex={currentIndex}
+            totalSlides={slides.length}
+            currentSlideDurationMs={currentSlide.durationMs ?? DEFAULT_DURATION_MS}
+            onTimingModeChange={handleTimingModeChange}
+            onGlobalDurationChange={handleGlobalDurationChange}
+            onCurrentSlideDurationChange={(ms) => updateCurrentSlide({ durationMs: ms })}
+          />
+
           <SlideControls
             slides={slides}
             currentIndex={currentIndex}
@@ -487,7 +610,7 @@ const SlideEditor = () => {
           <div className="bg-card border-t border-border px-4 py-4">
             <div className="max-w-5xl mx-auto">
               <AudioTrimmer
-                totalDuration={slides.length * 3}
+                totalDuration={slides.reduce((sum, s) => sum + (s.durationMs ?? DEFAULT_DURATION_MS) / 1000, 0)}
                 onAudioChange={setAudioData}
               />
             </div>
@@ -495,7 +618,6 @@ const SlideEditor = () => {
         </div>
       </div>
 
-      {/* Tool panel */}
       <ToolPanel
         activeTool={activeTool}
         onClose={() => setActiveTool(null)}
@@ -517,6 +639,5 @@ const SlideEditor = () => {
     </div>
   );
 };
-
 
 export default SlideEditor;
