@@ -21,7 +21,101 @@ const HIGHLIGHT_PREVIEW: Record<string, string> = {
   yellow: 'rgba(253,224,71,0.55)',
   pink:   'rgba(249,168,212,0.60)',
   lime:   'rgba(163,230,53,0.50)',
+  blue:   'rgba(96,165,250,0.50)',
+  gray:   'rgba(156,163,175,0.50)'
 };
+
+// Pen color map — matches InkColor values to real CSS colors
+const INK_COLORS: Record<string, string> = {
+  blue:   'hsl(215,60%,35%)',
+  black:  'hsl(220,20%,15%)',
+  red:    'hsl(0,70%,50%)',
+  green:  'hsl(140,50%,35%)',
+  purple: 'hsl(270,55%,45%)',
+  orange: 'hsl(28,85%,48%)',
+};
+
+/**
+ * Shared formula: how far below sticker.y (or the text div's top) the
+ * underline sits.  Both interactive and preview must use this so the
+ * downloaded image matches what you see in the editor.
+ *
+ * Breakdown:
+ *   4px  — padding-top of the text div
+ *   fontSize * 1.4 — one line of text at lineHeight 1.4
+ *   1px  — small breathing gap
+ *
+ * For multi-line text this will sit below line 1, but it is at least
+ * consistent between the two modes.
+ */
+function underlineTopOffset(fontSize: number): number {
+  return 4 + fontSize * 1.1 + 1;
+}
+
+/**
+ * Generates a deterministic irregular SVG underline path.
+ * Uses a seeded pseudo-random so the same text always gets
+ * the same wobble — no jitter on every render.
+ */
+function buildWobblePath(width: number, seed: number): string {
+  // Tiny seeded LCG so the path is stable across re-renders
+  let s = seed;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+
+  const segments = Math.max(6, Math.floor(width / 18));
+  const step     = width / segments;
+  const amp      = 2.2; // vertical wobble amplitude (px)
+
+  let d = `M 0 ${amp + rand() * amp}`;
+  for (let i = 1; i <= segments; i++) {
+    const x  = i * step;
+    const y  = amp + rand() * amp;
+    // Gentle quadratic bezier through a mid-control-point
+    const cx = (i - 0.5) * step;
+    const cy = amp * (0.2 + rand() * 1.6);
+    d += ` Q ${cx} ${cy} ${x} ${y}`;
+  }
+  return d;
+}
+
+/** Irregular underline SVG — rendered inline so html-to-image captures it */
+function WobbleUnderline({
+  width,
+  color,
+  seed,
+}: {
+  width: number;
+  color: string;
+  seed: number;
+}) {
+  const svgH = 7;
+  return (
+    <svg
+      width={width}
+      height={svgH}
+      viewBox={`0 0 ${width} ${svgH}`}
+      style={{
+        display:        'block',
+        overflow:       'visible',
+        pointerEvents:  'none',
+        marginTop:      '1px',
+      }}
+      aria-hidden="true"
+    >
+      <path
+        d={buildWobblePath(width, seed)}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 /** Shared canvas painter — works for both interactive and preview sizes */
 function paintGrid(
@@ -72,22 +166,20 @@ function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
 
     return (
       <>
-        {/* Ruled lines */}
         {lines.map((y) => (
           <div
             key={y}
             style={{
-              position:        'absolute',
-              left:            0,
-              top:             y,
-              width:           '100%',
-              height:          0,
-              borderTop:       '0.7px solid #9ec8e8',
-              pointerEvents:   'none',
+              position:      'absolute',
+              left:          0,
+              top:           y,
+              width:         '100%',
+              height:        0,
+              borderTop:     '0.7px solid #9ec8e8',
+              pointerEvents: 'none',
             }}
           />
         ))}
-        {/* Red margin line */}
         <div
           style={{
             position:      'absolute',
@@ -103,7 +195,6 @@ function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
     );
   }
 
-  // Math grid
   const step = 28;
   const vLines: number[] = [];
   const hLines: number[] = [];
@@ -175,7 +266,6 @@ export default function JournalCanvas({
     []
   );
 
-  /* Interactive grid — reads wrapRef for live dimensions */
   const drawGrid = useCallback(() => {
     const canvas = canvasRef.current;
     const wrap   = wrapRef.current;
@@ -183,12 +273,10 @@ export default function JournalCanvas({
     paintGrid(canvas, mode, wrap.clientWidth, wrap.clientHeight);
   }, [mode]);
 
-  /* Mount / mode-change effects — interactive only */
   useEffect(() => {
     if (!previewMode) drawGrid();
   }, [previewMode, drawGrid]);
 
-  /* Resize handler — interactive only */
   useEffect(() => {
     if (previewMode) return;
     const handleResize = () => {
@@ -226,10 +314,6 @@ export default function JournalCanvas({
 
   /* ══════════════════════════════════════════════════════
      PREVIEW MODE
-     Pure CSS grid + static HTML stickers — no canvas —
-     so html-to-image captures every element correctly.
-     All positions are in paper-space (px) with no zoom
-     applied — this matches how coordinates are stored.
   ══════════════════════════════════════════════════════ */
   if (previewMode) {
     return (
@@ -240,94 +324,123 @@ export default function JournalCanvas({
           height:          PAPER_HEIGHT,
           overflow:        'hidden',
           background:      mode === 'writing' ? '#fafaf8' : '#ffffff',
-          // Explicitly zero out any inherited transform so the capture
-          // coordinate space matches the stored sticker x/y values exactly.
           transform:       'none',
           transformOrigin: 'top left',
         }}
       >
-        {/* CSS grid lines — no canvas needed, fully captured by html-to-image */}
         <CssGrid mode={mode} />
 
-        {stickersRef.current.map((sticker) => (
-          <div
-            key={sticker.instanceId}
-            style={{
-              position:        'absolute',
-              left:            sticker.x,
-              top:             sticker.y,
-              // Apply only the sticker's own rotation/scale — NOT the page zoom.
-              // Sticker x/y are stored in paper-space coordinates so this is correct.
-              transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
-              transformOrigin: 'top left',
-              userSelect:      'none',
-              pointerEvents:   'none',
-            }}
-          >
-            {/* Text sticker */}
-            {sticker.textContent !== undefined && (
-              <div
-                style={{
-                  position:   'relative',
-                  padding:    '4px 8px',
-                  fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
-                  fontSize:   `${sticker.textSize || 24}px`,
-                  color:      sticker.textColor || 'hsl(215,60%,35%)',
-                  lineHeight: 1.4,
-                  textAlign:  sticker.textAlign || 'center',
-                  width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
-                  minWidth:   '60px',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak:  'break-word',
-                }}
-              >
-                {sticker.textHighlight && sticker.textHighlight !== 'none' && (
-                  <span
+        {stickersRef.current.map((sticker) => {
+          // Derive wobble seed from instanceId for stability
+          const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+          const underlinkWidth = sticker.textWidth ?? 180;
+          const underlineColor = INK_COLORS[sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '215' ? 'blue'
+            : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '0'   ? 'red'
+            : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '220' ? 'black'
+            : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '140' ? 'green'
+            : 'blue'] ?? sticker.textColor ?? INK_COLORS.blue;
+
+          return (
+            <div
+              key={sticker.instanceId}
+              style={{
+                position:        'absolute',
+                left:            sticker.x,
+                top:             sticker.y,
+                transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
+                transformOrigin: 'top left',
+                userSelect:      'none',
+                pointerEvents:   'none',
+              }}
+            >
+              {/* Text sticker */}
+              {sticker.textContent !== undefined && (
+                // Use `position: relative` wrapper so the underline can be
+                // absolutely positioned with the same offset formula used in
+                // interactive mode — this is what keeps them in sync on export.
+                <div style={{ position: 'relative' }}>
+                  <div
                     style={{
-                      position:     'absolute',
-                      inset:        0,
-                      background:   HIGHLIGHT_PREVIEW[sticker.textHighlight] ?? 'transparent',
-                      borderRadius: 2,
+                      position:   'relative',
+                      padding:    '4px 8px',
+                      fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
+                      fontSize:   `${sticker.textSize || 24}px`,
+                      color:      sticker.textColor || 'hsl(215,60%,35%)',
+                      lineHeight: 1.4,
+                      textAlign:  sticker.textAlign || 'center',
+                      width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
+                      minWidth:   '60px',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak:  'break-word',
                     }}
-                  />
-                )}
-                <span style={{ position: 'relative' }}>
-                  {sticker.textContent || ''}
+                  >
+                    {sticker.textHighlight && sticker.textHighlight !== 'none' && (
+                      <span
+                        style={{
+                          position:     'absolute',
+                          inset:        0,
+                          background:   HIGHLIGHT_PREVIEW[sticker.textHighlight] ?? 'transparent',
+                          borderRadius: 2,
+                        }}
+                      />
+                    )}
+                    <span style={{ position: 'relative' }}>
+                      {sticker.textContent || ''}
+                    </span>
+                  </div>
+
+                  {/* Underline: absolutely positioned using the shared offset formula */}
+                  {sticker.textUnderline && (
+                    <div
+                      style={{
+                        position:      'absolute',
+                        left:          0,
+                        top:           underlineTopOffset(sticker.textSize || 24),
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <WobbleUnderline
+                        width={underlinkWidth}
+                        color={underlineColor}
+                        seed={seed}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Image / photo sticker */}
+              {sticker.textContent === undefined && sticker.imageUrl && (
+                <img
+                  src={sticker.imageUrl}
+                  alt=""
+                  crossOrigin="anonymous"
+                  style={{
+                    width:     96,
+                    height:    96,
+                    objectFit: 'contain',
+                    filter:    sticker.photoFilter || 'none',
+                    display:   'block',
+                  }}
+                />
+              )}
+
+              {/* Emoji sticker */}
+              {sticker.textContent === undefined && !sticker.imageUrl && sticker.emoji && (
+                <span
+                  style={{
+                    fontSize:   40,
+                    lineHeight: 1,
+                    display:    'block',
+                    filter:     'drop-shadow(0 1px 2px rgba(0,0,0,0.18))',
+                  }}
+                >
+                  {sticker.emoji}
                 </span>
-              </div>
-            )}
-
-            {/* Image / photo sticker */}
-            {sticker.textContent === undefined && sticker.imageUrl && (
-              <img
-                src={sticker.imageUrl}
-                alt=""
-                crossOrigin="anonymous"
-                style={{
-                  width:     96,
-                  height:    96,
-                  objectFit: 'contain',
-                  filter:    sticker.photoFilter || 'none',
-                  display:   'block',
-                }}
-              />
-            )}
-
-            {/* Emoji sticker */}
-            {sticker.textContent === undefined && !sticker.imageUrl && sticker.emoji && (
-              <span
-                style={{
-                  fontSize:   40,
-                  lineHeight: 1,
-                  display:    'block',
-                  filter:     'drop-shadow(0 1px 2px rgba(0,0,0,0.18))',
-                }}
-              >
-                {sticker.emoji}
-              </span>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -357,32 +470,62 @@ export default function JournalCanvas({
         className="absolute pointer-events-none"
         style={{ inset: 0, overflow: 'visible' }}
       >
-        {stickersRef.current.map((sticker) => (
-          <div key={sticker.instanceId} className="pointer-events-auto">
-            <DraggableSticker
-              sticker={sticker}
-              onUpdate={(updated) =>
-                setStickers((prev) =>
-                  prev.map((s) => s.instanceId === updated.instanceId ? updated : s)
-                )
-              }
-              onDelete={(id) =>
-                setStickers((prev) => prev.filter((s) => s.instanceId !== id))
-              }
-              onDoubleClick={sticker.textContent !== undefined ? startEdit : undefined}
-              hidePlaceholder={editingId === sticker.instanceId}
-              showTextStretch={sticker.textContent !== undefined}
-              showTextResize={sticker.textContent === undefined}
-              containerRef={wrapRef}
-              zoom={zoom}
-            />
-          </div>
-        ))}
+        {stickersRef.current.map((sticker) => {
+          const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+          const underlineWidth = sticker.textWidth ?? 220;
+          const underlineColor = sticker.textColor || INK_COLORS.blue;
+
+          return (
+            <div key={sticker.instanceId} className="pointer-events-auto">
+              <DraggableSticker
+                sticker={sticker}
+                onUpdate={(updated) =>
+                  setStickers((prev) =>
+                    prev.map((s) => s.instanceId === updated.instanceId ? updated : s)
+                  )
+                }
+                onDelete={(id) =>
+                  setStickers((prev) => prev.filter((s) => s.instanceId !== id))
+                }
+                onDoubleClick={sticker.textContent !== undefined ? startEdit : undefined}
+                hidePlaceholder={editingId === sticker.instanceId}
+                showTextStretch={sticker.textContent !== undefined}
+                showTextResize={sticker.textContent === undefined}
+                containerRef={wrapRef}
+                zoom={zoom}
+              />
+
+              {/* Underline: uses the shared offset formula so it matches the download */}
+              {sticker.textContent !== undefined && sticker.textUnderline && (
+                <div
+                  style={{
+                    position:        'absolute',
+                    left:            sticker.x,
+                    top:             sticker.y + underlineTopOffset(sticker.textSize || 24),
+                    transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
+                    transformOrigin: 'top left',
+                    pointerEvents:   'none',
+                  }}
+                >
+                  <WobbleUnderline
+                    width={underlineWidth}
+                    color={underlineColor}
+                    seed={seed}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {editingId && (() => {
         const sticker = stickersRef.current.find((s) => s.instanceId === editingId);
         if (!sticker) return null;
+
+        const hasUnderline = !!sticker.textUnderline;
+        const underlineColor = sticker.textColor || INK_COLORS.blue;
+
         return (
           <div
             style={{
@@ -417,17 +560,74 @@ export default function JournalCanvas({
               }}
               maxLength={2000}
             />
-            <span
+
+            {/* Bottom bar: underline toggle + char counter */}
+            <div
               style={{
-                fontSize:   '11px',
-                color:      '#9ca3af',
-                marginTop:  '2px',
-                fontFamily: 'sans-serif',
-                lineHeight: 1,
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'space-between',
+                width:          sticker.textWidth ? `${sticker.textWidth}px` : '220px',
+                marginTop:      '3px',
               }}
             >
-              {editText.length}/2000
-            </span>
+              {/* Underline toggle button */}
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setStickers((prev) =>
+                    prev.map((s) =>
+                      s.instanceId === editingId
+                        ? { ...s, textUnderline: !s.textUnderline }
+                        : s
+                    )
+                  );
+                }}
+                title={hasUnderline ? 'Remove underline' : 'Add irregular underline'}
+                style={{
+                  display:        'flex',
+                  alignItems:     'center',
+                  gap:            '5px',
+                  padding:        '2px 7px',
+                  borderRadius:   '5px',
+                  border:         `1.5px solid ${hasUnderline ? underlineColor : '#d1d5db'}`,
+                  background:     hasUnderline ? `${underlineColor}18` : 'transparent',
+                  cursor:         'pointer',
+                  userSelect:     'none',
+                }}
+              >
+                <svg width="22" height="7" viewBox="0 0 22 7" aria-hidden="true">
+                  <path
+                    d={buildWobblePath(22, 42)}
+                    fill="none"
+                    stroke={hasUnderline ? underlineColor : '#9ca3af'}
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span style={{
+                  fontSize:   '11px',
+                  fontFamily: 'sans-serif',
+                  color:      hasUnderline ? underlineColor : '#9ca3af',
+                  fontWeight: hasUnderline ? 700 : 400,
+                }}>
+                  {hasUnderline ? 'underlined' : 'underline'}
+                </span>
+              </button>
+
+              {/* Character counter */}
+              <span
+                style={{
+                  fontSize:   '11px',
+                  color:      '#9ca3af',
+                  fontFamily: 'sans-serif',
+                  lineHeight: 1,
+                }}
+              >
+                {editText.length}/2000
+              </span>
+            </div>
           </div>
         );
       })()}
