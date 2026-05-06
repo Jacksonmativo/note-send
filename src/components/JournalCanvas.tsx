@@ -302,14 +302,10 @@ export default function JournalCanvas({
 
   const commitEdit = useCallback(() => {
     if (!editingId) return;
-    // Measure the mirror span to persist the correct width
-    const mirror = document.getElementById(`mirror-${editingId}`);
-    const measuredWidth = mirror ? mirror.getBoundingClientRect().width : 0;
-    const savedWidth = Math.max(120, measuredWidth + 24);
     setStickers((prev) =>
       prev.map((s) =>
         s.instanceId === editingId
-          ? { ...s, textContent: editText.slice(0, 2000), textWidth: savedWidth }
+          ? { ...s, textContent: editText.slice(0, 2000) }
           : s
       )
     );
@@ -374,7 +370,8 @@ export default function JournalCanvas({
                       textAlign:  sticker.textAlign || 'center',
                       width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
                       minWidth:   '60px',
-                      whiteSpace: 'pre',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak:  'break-word',
                     }}
                   >
                     {sticker.textHighlight && sticker.textHighlight !== 'none' && (
@@ -542,97 +539,35 @@ export default function JournalCanvas({
               alignItems:      'flex-end',
             }}
           >
-            {/*
-              Mirror span — lives off-screen. We update its textContent synchronously
-              in onChange BEFORE measuring, so getBoundingClientRect is always fresh.
-            */}
-            <span
-              aria-hidden
-              id={`mirror-${editingId}`}
-              style={{
-                position:      'fixed',
-                top:           -9999,
-                left:          -9999,
-                visibility:    'hidden',
-                whiteSpace:    'pre',
-                fontFamily:    `'${sticker.textFont || 'Caveat'}', cursive`,
-                fontSize:      `${sticker.textSize || 24}px`,
-                lineHeight:    1.4,
-                padding:       '4px 8px',
-                pointerEvents: 'none',
-              }}
-            />
-
             <textarea
               autoFocus
               value={editText}
-              placeholder="Your text here"
-              onChange={(e) => {
-                const val = e.target.value;
-                setEditText(val);
-                const el = e.target as HTMLTextAreaElement;
-
-                // 1. Update mirror span text synchronously with the longest line
-                const mirror = document.getElementById(`mirror-${editingId}`);
-                if (mirror) {
-                  const longest = val.split('\n').reduce((a, b) => a.length >= b.length ? a : b, '');
-                  mirror.textContent = longest || 'A';
-                  // 2. Measure immediately — no RAF needed, DOM is already updated
-                  const newW = Math.max(120, mirror.getBoundingClientRect().width + 24);
-                  el.style.width = `${newW}px`;
-                }
-
-                // 3. Grow height vertically
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-                el.style.overflowY = el.scrollHeight > 320 ? 'auto' : 'hidden';
-              }}
-              ref={(el) => {
-                if (!el) return;
-                // Set initial width from existing text on mount
-                const mirror = document.getElementById(`mirror-${editingId}`);
-                if (mirror) {
-                  const longest = editText.split('\n').reduce((a, b) => a.length >= b.length ? a : b, '');
-                  mirror.textContent = longest || 'A';
-                  el.style.width = `${Math.max(120, mirror.getBoundingClientRect().width + 24)}px`;
-                }
-                el.style.height = 'auto';
-                el.style.height = `${el.scrollHeight}px`;
-                el.style.overflowY = el.scrollHeight > 320 ? 'auto' : 'hidden';
-              }}
+              onChange={(e) => setEditText(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null); }}
+              className="bg-transparent p-2 text-sm leading-6 resize-none"
               style={{
-                display:      'block',
-                minWidth:     '120px',
-                width:        sticker.textWidth ? `${sticker.textWidth}px` : '120px',
-                minHeight:    `${(sticker.textSize || 24) * 1.6 + 8}px`,
-                fontFamily:   `'${sticker.textFont || 'Caveat'}', cursive`,
-                fontSize:     `${sticker.textSize || 24}px`,
-                color:        sticker.textColor || 'hsl(215, 60%, 35%)',
-                textAlign:    sticker.textAlign || 'center',
-                outline:      'none',
-                border:       '1.5px solid #bfdbfe',
-                borderRadius: '3px',
-                padding:      '4px 8px',
-                boxSizing:    'border-box',
-                background:   'transparent',
-                resize:       'none',
-                lineHeight:   1.4,
-                overflowX:    'hidden',
-                overflowY:    'hidden',
-                whiteSpace:   'pre',
+                minWidth:        '140px',
+                width:           sticker.textWidth ? `${sticker.textWidth}px` : '220px',
+                fontFamily:      `'${sticker.textFont || 'Caveat'}', cursive`,
+                fontSize:        `${sticker.textSize || 24}px`,
+                color:           sticker.textColor || 'hsl(215, 60%, 35%)',
+                textAlign:       sticker.textAlign || 'center',
+                outline:         'none',
+                border:          '1.5px solid #bfdbfe',
+                borderRadius:    '3px',
+                boxSizing:       'border-box',
               }}
               maxLength={2000}
             />
 
-            {/* Bottom bar: underline toggle + char counter — tracks textarea width */}
+            {/* Bottom bar: underline toggle + char counter */}
             <div
               style={{
                 display:        'flex',
                 alignItems:     'center',
                 justifyContent: 'space-between',
-                width:          '100%',
+                width:          sticker.textWidth ? `${sticker.textWidth}px` : '220px',
                 marginTop:      '3px',
               }}
             >
@@ -698,4 +633,4 @@ export default function JournalCanvas({
       })()}
     </div>
   );
-}
+  }
