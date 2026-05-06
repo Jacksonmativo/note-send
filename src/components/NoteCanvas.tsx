@@ -169,6 +169,12 @@ const NoteCanvas = ({
 
   const commitEdit = useCallback(() => {
     if (editingId) {
+      // Read the mirror span's rendered width so the saved sticker
+      // is exactly as wide as the text the user typed — no more, no less.
+      const mirrorEl = document.getElementById(`mirror-${editingId}`);
+      const measuredWidth = mirrorEl ? mirrorEl.getBoundingClientRect().width : 0;
+      const savedWidth = Math.max(120, measuredWidth + 20);
+
       setStickers((prev) =>
         prev.map((s) =>
           s.instanceId === editingId
@@ -178,6 +184,7 @@ const NoteCanvas = ({
                 textFont: fontFamily,
                 textColor: inkCssMap[inkColor],
                 textSize: fontSize,
+                textWidth: savedWidth, // ← persisted so DraggableSticker renders at the same width
               }
             : s
         )
@@ -191,7 +198,6 @@ const NoteCanvas = ({
     commitEdit();
     setIsExporting(true);
     try {
-      // Use multiple attempts for reliability
       const dataUrl = await toPng(canvasRef.current, {
         quality: 1,
         pixelRatio: 2,
@@ -207,7 +213,6 @@ const NoteCanvas = ({
       setShowCoffeePopup(true);
     } catch (err) {
       console.error('Export failed:', err);
-      // Retry once
       try {
         const dataUrl = await toPng(canvasRef.current!, {
           quality: 1,
@@ -281,6 +286,12 @@ const NoteCanvas = ({
           const s = stickers.find((st) => st.instanceId === editingId);
           if (!s) return null;
           const currentAlign = s.textAlign || 'center';
+
+          // Derive textarea width from the widest line of text
+          const longestLine = (editText || 'Your text here')
+            .split('\n')
+            .reduce((a: string, b: string) => (a.length >= b.length ? a : b), '');
+
           return (
             <div
               className="absolute z-[100]"
@@ -296,9 +307,6 @@ const NoteCanvas = ({
                       setStickers((prev) =>
                         prev.map((st) => st.instanceId === editingId ? { ...st, textAlign: align } : st)
                       );
-                      if (align === 'center') {
-                        setEditText((prev) => prev + '\n');
-                      }
                     }}
                     className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
                       currentAlign === align ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -308,6 +316,32 @@ const NoteCanvas = ({
                   </button>
                 ))}
               </div>
+
+              {/*
+                Hidden mirror span — measures the natural width of the widest line
+                so the textarea only grows as wide as the content needs.
+              */}
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  visibility: 'hidden',
+                  whiteSpace: 'pre',
+                  fontFamily: `'${fontFamily}', cursive`,
+                  fontSize: `${fontSize}px`,
+                  lineHeight: '1.4',
+                  // match textarea padding so measurement is accurate
+                  padding: '4px 8px',
+                  pointerEvents: 'none',
+                  top: 0,
+                  left: 0,
+                }}
+                ref={(el) => {
+                  if (el) el.textContent = longestLine || 'Your text here';
+                }}
+                id={`mirror-${editingId}`}
+              />
+
               <textarea
                 autoFocus
                 value={editText}
@@ -318,16 +352,26 @@ const NoteCanvas = ({
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') commitEdit();
                 }}
-                className="min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize-x placeholder:text-muted-foreground/50"
+                className="min-h-[40px] bg-background/80 border-2 border-primary rounded-md px-2 py-1 outline-none resize-none placeholder:text-muted-foreground/50"
                 style={{
                   fontFamily: `'${fontFamily}', cursive`,
                   fontSize: `${fontSize}px`,
                   color: inkCssMap[inkColor],
                   lineHeight: '1.4',
                   textAlign: currentAlign,
-                  width: s.textWidth ? `${s.textWidth}px` : '180px',
+                  // Hide horizontal scrollbar (prevents false line wraps),
+                  // but show vertical scrollbar when user adds new lines.
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                  // +20 gives room for border (4px) + subpixel rounding so text never wraps.
+                  // Falls back to saved s.textWidth on first render (before mirror paints).
+                  width: (() => {
+                    const el = document.getElementById(`mirror-${editingId}`);
+                    const measured = el ? el.getBoundingClientRect().width : 0;
+                    const fallback = s.textWidth ?? 120;
+                    return `${Math.max(120, measured > 0 ? measured + 20 : fallback)}px`;
+                  })(),
                   minWidth: '120px',
-                  maxWidth: '400px',
                 }}
                 maxLength={400}
               />
