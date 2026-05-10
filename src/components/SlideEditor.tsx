@@ -3,9 +3,7 @@ import { toPng } from 'html-to-image';
 import NoteCanvas from './NoteCanvas';
 import Toolbar from './Toolbar';
 import ToolPanel from './ToolPanel';
-import SlideControls from './SlideControls';
-import AudioTrimmer from './AudioTrimmer';
-import CoffeePopup from './CoffeePopup';
+import CompactToolbar from './CompactToolbar';
 import { backgrounds } from './BackgroundSelector';
 import type { PlacedSticker } from './DraggableSticker';
 import type { InkColor } from './StickerData';
@@ -21,7 +19,6 @@ const MAX_SLIDES = 30;
 const DEFAULT_DURATION_MS = 3000;
 const TRANSITION_MS = 500;
 const FPS = 30;
-const FRAME_MS = 1000 / FPS;
 
 const drawContain = (
   ctx: CanvasRenderingContext2D,
@@ -44,169 +41,6 @@ const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()
 const easeInOut = (t: number) =>
   t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 
-// Reusable stepper + dot-track for a single duration value
-function DurationStepper({
-  durationMs,
-  onChange,
-}: {
-  durationMs: number;
-  onChange: (ms: number) => void;
-}) {
-  const seconds = durationMs / 1000;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <button
-        onClick={() => onChange(Math.max(1000, durationMs - 1000))}
-        disabled={durationMs <= 1000}
-        style={{
-          width: '26px', height: '26px', borderRadius: '6px',
-          border: '1px solid hsl(var(--border))',
-          background: durationMs <= 1000 ? 'transparent' : 'hsl(var(--accent))',
-          cursor: durationMs <= 1000 ? 'not-allowed' : 'pointer',
-          opacity: durationMs <= 1000 ? 0.3 : 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '15px', fontWeight: 700, color: 'hsl(var(--foreground))', flexShrink: 0,
-        }}
-      >−</button>
-
-      <span style={{
-        minWidth: '36px', textAlign: 'center', fontSize: '13px', fontWeight: 700,
-        background: 'hsl(215 60% 50% / 0.12)', color: 'hsl(215 60% 40%)',
-        borderRadius: '6px', padding: '3px 7px',
-      }}>
-        {seconds}s
-      </span>
-
-      <button
-        onClick={() => onChange(Math.min(5000, durationMs + 1000))}
-        disabled={durationMs >= 5000}
-        style={{
-          width: '26px', height: '26px', borderRadius: '6px',
-          border: '1px solid hsl(var(--border))',
-          background: durationMs >= 5000 ? 'transparent' : 'hsl(var(--accent))',
-          cursor: durationMs >= 5000 ? 'not-allowed' : 'pointer',
-          opacity: durationMs >= 5000 ? 0.3 : 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '15px', fontWeight: 700, color: 'hsl(var(--foreground))', flexShrink: 0,
-        }}
-      >+</button>
-
-      <div style={{ display: 'flex', gap: '4px' }}>
-        {[1, 2, 3, 4, 5].map((s) => (
-          <button
-            key={s}
-            onClick={() => onChange(s * 1000)}
-            title={`${s}s`}
-            style={{
-              width: '7px', height: '7px', borderRadius: '50%',
-              border: 'none', cursor: 'pointer', padding: 0,
-              background: seconds >= s ? 'hsl(215 60% 50%)' : 'hsl(var(--border))',
-              transition: 'background 0.15s',
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SlideDurationPicker({
-  timingMode,
-  globalDurationMs,
-  currentSlideIndex,
-  totalSlides,
-  currentSlideDurationMs,
-  onTimingModeChange,
-  onGlobalDurationChange,
-  onCurrentSlideDurationChange,
-}: {
-  timingMode: 'equal' | 'custom';
-  globalDurationMs: number;
-  currentSlideIndex: number;
-  totalSlides: number;
-  currentSlideDurationMs: number;
-  onTimingModeChange: (mode: 'equal' | 'custom') => void;
-  onGlobalDurationChange: (ms: number) => void;
-  onCurrentSlideDurationChange: (ms: number) => void;
-}) {
-  return (
-    <div style={{
-      background: 'hsl(var(--card))',
-      border: '1px solid hsl(var(--border))',
-      borderRadius: '10px',
-      overflow: 'hidden',
-      userSelect: 'none',
-    }}>
-      {/* Header row with toggle */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '10px 16px',
-        borderBottom: '1px solid hsl(var(--border))',
-      }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.55, flexShrink: 0 }}>
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.85 }}>
-          Slide timing
-        </span>
-
-        {/* Toggle pill */}
-        <div style={{
-          display: 'flex', marginLeft: 'auto',
-          background: 'hsl(var(--muted))',
-          borderRadius: '8px', padding: '3px', gap: '2px',
-        }}>
-          {(['equal', 'custom'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => onTimingModeChange(mode)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 600,
-                transition: 'all 0.15s',
-                background: timingMode === mode ? 'hsl(215 60% 50%)' : 'transparent',
-                color: timingMode === mode ? '#fff' : 'hsl(var(--muted-foreground))',
-              }}
-            >
-              {mode === 'equal' ? '⏱ Equal' : '✦ Custom'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: '12px 16px' }}>
-        {timingMode === 'equal' ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '12px', opacity: 0.6, whiteSpace: 'nowrap' }}>All slides</span>
-            <DurationStepper durationMs={globalDurationMs} onChange={onGlobalDurationChange} />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '12px', opacity: 0.6, whiteSpace: 'nowrap', minWidth: '72px' }}>
-                Slide {currentSlideIndex + 1} / {totalSlides}
-              </span>
-              <DurationStepper
-                durationMs={currentSlideDurationMs}
-                onChange={onCurrentSlideDurationChange}
-              />
-            </div>
-            <p style={{ margin: 0, fontSize: '11px', opacity: 0.4, lineHeight: 1.4 }}>
-              Navigate to each slide to set its duration individually.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 const SlideEditor = () => {
   const [slides, setSlides] = useState<SlideState[]>([
     { id: `slide-${Date.now()}`, stickers: [], backgroundId: 'notebook', durationMs: DEFAULT_DURATION_MS },
@@ -227,6 +61,7 @@ const SlideEditor = () => {
   const [showCoffeePopup, setShowCoffeePopup] = useState(false);
   const [timingMode, setTimingMode] = useState<'equal' | 'custom'>('equal');
   const [globalDurationMs, setGlobalDurationMs] = useState(DEFAULT_DURATION_MS);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const exportCancelledRef = useRef(false);
@@ -354,7 +189,7 @@ const SlideEditor = () => {
       setExportStatus('Encoding video...');
 
       const offscreen = document.createElement('canvas');
-      offscreen.width  = 1080;
+      offscreen.width = 1080;
       offscreen.height = 1920;
       const ctx = offscreen.getContext('2d')!;
 
@@ -395,12 +230,10 @@ const SlideEditor = () => {
       for (let i = 0; i < totalSlides; i++) {
         if (exportCancelledRef.current) throw new Error('cancelled');
 
-        const curImg  = loadedImages[i];
+        const curImg = loadedImages[i];
         const nextImg = i < totalSlides - 1 ? loadedImages[i + 1] : null;
-        // Per-slide hold = user-chosen duration minus the transition overlap
-        const holdMs  = Math.max(200, (slides[i]?.durationMs ?? DEFAULT_DURATION_MS) - TRANSITION_MS);
+        const holdMs = Math.max(200, (slides[i]?.durationMs ?? DEFAULT_DURATION_MS) - TRANSITION_MS);
 
-        // Hold phase
         const holdStart = performance.now();
         while (performance.now() - holdStart < holdMs) {
           if (exportCancelledRef.current) throw new Error('cancelled');
@@ -409,20 +242,17 @@ const SlideEditor = () => {
           await nextFrame();
         }
 
-        // Transition phase (skip on last slide)
         if (nextImg) {
           const transStart = performance.now();
           while (true) {
             const elapsed = performance.now() - transStart;
-            const rawT    = Math.min(elapsed / TRANSITION_MS, 1);
-            const alpha   = easeInOut(rawT);
-
+            const rawT = Math.min(elapsed / TRANSITION_MS, 1);
+            const alpha = easeInOut(rawT);
             ctx.globalAlpha = 1;
             drawContain(ctx, curImg, offscreen.width, offscreen.height);
             ctx.globalAlpha = alpha;
             drawContain(ctx, nextImg, offscreen.width, offscreen.height);
             ctx.globalAlpha = 1;
-
             await nextFrame();
             if (rawT >= 1) break;
             if (exportCancelledRef.current) throw new Error('cancelled');
@@ -439,9 +269,9 @@ const SlideEditor = () => {
       setExportStatus('Finishing up...');
 
       const blob = await videoPromise;
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = `slideshow-${Date.now()}.webm`;
       document.body.appendChild(a);
       a.click();
@@ -464,11 +294,6 @@ const SlideEditor = () => {
     setExportStatus('');
   };
 
-  const cancelExport = () => {
-    exportCancelledRef.current = true;
-  };
-
-  // When switching to equal mode, stamp the current globalDuration onto all slides
   const handleTimingModeChange = (mode: 'equal' | 'custom') => {
     setTimingMode(mode);
     if (mode === 'equal') {
@@ -476,7 +301,6 @@ const SlideEditor = () => {
     }
   };
 
-  // When global duration changes, update all slides immediately
   const handleGlobalDurationChange = (ms: number) => {
     setGlobalDurationMs(ms);
     setSlides((prev) => prev.map((s) => ({ ...s, durationMs: ms })));
@@ -558,6 +382,11 @@ const SlideEditor = () => {
     handleAddImageSticker(dataUrl);
   };
 
+  const totalAudioDuration = slides.reduce(
+    (sum, s) => sum + (s.durationMs ?? DEFAULT_DURATION_MS) / 1000,
+    0
+  );
+
   return (
     <div className="flex flex-col min-h-screen">
       <Toolbar
@@ -566,7 +395,8 @@ const SlideEditor = () => {
       />
 
       <div className="flex-1 px-4 py-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-5xl mx-auto space-y-4">
+          {/* Canvas */}
           <div className="flex justify-center">
             <NoteCanvas
               stickers={currentSlide.stickers}
@@ -580,41 +410,29 @@ const SlideEditor = () => {
             />
           </div>
 
-          <SlideDurationPicker
-            timingMode={timingMode}
-            globalDurationMs={globalDurationMs}
-            currentSlideIndex={currentIndex}
-            totalSlides={slides.length}
-            currentSlideDurationMs={currentSlide.durationMs ?? DEFAULT_DURATION_MS}
-            onTimingModeChange={handleTimingModeChange}
-            onGlobalDurationChange={handleGlobalDurationChange}
-            onCurrentSlideDurationChange={(ms) => updateCurrentSlide({ durationMs: ms })}
-          />
-
-          <SlideControls
+          {/* Compact toolbar — replaces SlideControls + SlideDurationPicker + AudioTrimmer */}
+          <CompactToolbar
             slides={slides}
             currentIndex={currentIndex}
+            timingMode={timingMode}
+            globalDurationMs={globalDurationMs}
+            isExportingVideo={isExportingVideo}
+            exportProgress={exportProgress}
+            exportStatus={exportStatus}
+            showCoffeePopup={showCoffeePopup}
+            totalAudioDuration={totalAudioDuration}
             onAddSlide={addSlide}
             onDuplicate={duplicateSlide}
             onDownloadHD={downloadHD}
             onExportVideo={exportVideo}
             onDeleteSlide={deleteSlide}
             onGoToSlide={goToSlide}
-            isExportingVideo={isExportingVideo}
-            exportProgress={exportProgress}
-            exportStatus={exportStatus}
-            showCoffeePopup={showCoffeePopup}
+            onTimingModeChange={handleTimingModeChange}
+            onGlobalDurationChange={handleGlobalDurationChange}
+            onCurrentSlideDurationChange={(ms) => updateCurrentSlide({ durationMs: ms })}
+            onAudioChange={setAudioData}
             onCoffeePopupClose={() => setShowCoffeePopup(false)}
           />
-
-          <div className="bg-card border-t border-border px-4 py-4">
-            <div className="max-w-5xl mx-auto">
-              <AudioTrimmer
-                totalDuration={slides.reduce((sum, s) => sum + (s.durationMs ?? DEFAULT_DURATION_MS) / 1000, 0)}
-                onAudioChange={setAudioData}
-              />
-            </div>
-          </div>
         </div>
       </div>
 
