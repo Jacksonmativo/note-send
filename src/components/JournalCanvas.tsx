@@ -25,7 +25,6 @@ const HIGHLIGHT_PREVIEW: Record<string, string> = {
   gray:   'rgba(156,163,175,0.50)'
 };
 
-// Pen color map — matches InkColor values to real CSS colors
 const INK_COLORS: Record<string, string> = {
   blue:   'hsl(215,60%,35%)',
   black:  'hsl(220,20%,15%)',
@@ -35,30 +34,11 @@ const INK_COLORS: Record<string, string> = {
   orange: 'hsl(28,85%,48%)',
 };
 
-/**
- * Shared formula: how far below sticker.y (or the text div's top) the
- * underline sits.  Both interactive and preview must use this so the
- * downloaded image matches what you see in the editor.
- *
- * Breakdown:
- *   4px  — padding-top of the text div
- *   fontSize * 1.4 — one line of text at lineHeight 1.4
- *   1px  — small breathing gap
- *
- * For multi-line text this will sit below line 1, but it is at least
- * consistent between the two modes.
- */
 function underlineTopOffset(fontSize: number): number {
   return 4 + fontSize * 1.1 + 1;
 }
 
-/**
- * Generates a deterministic irregular SVG underline path.
- * Uses a seeded pseudo-random so the same text always gets
- * the same wobble — no jitter on every render.
- */
 function buildWobblePath(width: number, seed: number): string {
-  // Tiny seeded LCG so the path is stable across re-renders
   let s = seed;
   const rand = () => {
     s = (s * 1664525 + 1013904223) & 0xffffffff;
@@ -67,13 +47,12 @@ function buildWobblePath(width: number, seed: number): string {
 
   const segments = Math.max(6, Math.floor(width / 18));
   const step     = width / segments;
-  const amp      = 2.2; // vertical wobble amplitude (px)
+  const amp      = 2.2;
 
   let d = `M 0 ${amp + rand() * amp}`;
   for (let i = 1; i <= segments; i++) {
     const x  = i * step;
     const y  = amp + rand() * amp;
-    // Gentle quadratic bezier through a mid-control-point
     const cx = (i - 0.5) * step;
     const cy = amp * (0.2 + rand() * 1.6);
     d += ` Q ${cx} ${cy} ${x} ${y}`;
@@ -81,7 +60,6 @@ function buildWobblePath(width: number, seed: number): string {
   return d;
 }
 
-/** Irregular underline SVG — rendered inline so html-to-image captures it */
 function WobbleUnderline({
   width,
   color,
@@ -117,7 +95,6 @@ function WobbleUnderline({
   );
 }
 
-/** Shared canvas painter — works for both interactive and preview sizes */
 function paintGrid(
   canvas: HTMLCanvasElement,
   mode: 'writing' | 'math',
@@ -156,7 +133,6 @@ function paintGrid(
   }
 }
 
-/** Pure-CSS grid rendered as divs — used in previewMode so html-to-image captures it */
 function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
   if (mode === 'writing') {
     const lineSpacing = 24;
@@ -312,8 +288,34 @@ export default function JournalCanvas({
     setEditingId(null);
   }, [editingId, editText, setStickers]);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // KEY FIX: DraggableSticker gives us positions in the DOM space of the
+  // *scaled* container.  We must divide by `zoom` before storing so that
+  // every x/y in state is always in paper-space (unzoomed pixels).
+  // The preview and PDF both render at zoom=1, so they read paper-space
+  // values directly and positions will always match.
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleStickerUpdate = useCallback(
+    (updated: PlacedSticker) => {
+      setStickers((prev) =>
+        prev.map((s) => {
+          if (s.instanceId !== updated.instanceId) return s;
+          return {
+            ...updated,
+            // Normalize to paper-space by dividing out the current zoom.
+            // If DraggableSticker already works in paper-space (zoom=1 always),
+            // this is a no-op (dividing by 1).
+            x: updated.x / zoom,
+            y: updated.y / zoom,
+          };
+        })
+      );
+    },
+    [zoom, setStickers]
+  );
+
   /* ══════════════════════════════════════════════════════
-     PREVIEW MODE
+     PREVIEW MODE — renders at 1:1 paper-space; no zoom applied
   ══════════════════════════════════════════════════════ */
   if (previewMode) {
     return (
@@ -331,7 +333,6 @@ export default function JournalCanvas({
         <CssGrid mode={mode} />
 
         {stickersRef.current.map((sticker) => {
-          // Derive wobble seed from instanceId for stability
           const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
           const underlinkWidth = sticker.textWidth ?? 180;
           const underlineColor = INK_COLORS[sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '215' ? 'blue'
@@ -345,6 +346,7 @@ export default function JournalCanvas({
               key={sticker.instanceId}
               style={{
                 position:        'absolute',
+                // sticker.x / sticker.y are always paper-space — use directly
                 left:            sticker.x,
                 top:             sticker.y,
                 transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
@@ -353,11 +355,7 @@ export default function JournalCanvas({
                 pointerEvents:   'none',
               }}
             >
-              {/* Text sticker */}
               {sticker.textContent !== undefined && (
-                // Use `position: relative` wrapper so the underline can be
-                // absolutely positioned with the same offset formula used in
-                // interactive mode — this is what keeps them in sync on export.
                 <div style={{ position: 'relative' }}>
                   <div
                     style={{
@@ -389,7 +387,6 @@ export default function JournalCanvas({
                     </span>
                   </div>
 
-                  {/* Underline: absolutely positioned using the shared offset formula */}
                   {sticker.textUnderline && (
                     <div
                       style={{
@@ -409,7 +406,6 @@ export default function JournalCanvas({
                 </div>
               )}
 
-              {/* Image / photo sticker */}
               {sticker.textContent === undefined && sticker.imageUrl && (
                 <img
                   src={sticker.imageUrl}
@@ -425,7 +421,6 @@ export default function JournalCanvas({
                 />
               )}
 
-              {/* Emoji sticker */}
               {sticker.textContent === undefined && !sticker.imageUrl && sticker.emoji && (
                 <span
                   style={{
@@ -447,6 +442,8 @@ export default function JournalCanvas({
 
   /* ══════════════════════════════════════════════════════
      INTERACTIVE MODE
+     sticker.x / sticker.y are paper-space values.
+     Multiply by zoom to position them inside the scaled container.
   ══════════════════════════════════════════════════════ */
   return (
     <div
@@ -475,15 +472,25 @@ export default function JournalCanvas({
           const underlineWidth = sticker.textWidth ?? 180;
           const underlineColor = sticker.textColor || INK_COLORS.blue;
 
+          // Scale paper-space coords into the zoomed DOM space so the sticker
+          // appears at the correct visual position on screen.
+          const displayX = sticker.x * zoom;
+          const displayY = sticker.y * zoom;
+
+          // Pass a zoom-adjusted version of the sticker to DraggableSticker so
+          // it starts at the right DOM position.  handleStickerUpdate will
+          // divide back by zoom before saving.
+          const displaySticker: PlacedSticker = {
+            ...sticker,
+            x: displayX,
+            y: displayY,
+          };
+
           return (
             <div key={sticker.instanceId} className="pointer-events-auto">
               <DraggableSticker
-                sticker={sticker}
-                onUpdate={(updated) =>
-                  setStickers((prev) =>
-                    prev.map((s) => s.instanceId === updated.instanceId ? updated : s)
-                  )
-                }
+                sticker={displaySticker}
+                onUpdate={handleStickerUpdate}
                 onDelete={(id) =>
                   setStickers((prev) => prev.filter((s) => s.instanceId !== id))
                 }
@@ -495,13 +502,14 @@ export default function JournalCanvas({
                 zoom={zoom}
               />
 
-              {/* Underline: uses the shared offset formula so it matches the download */}
               {sticker.textContent !== undefined && sticker.textUnderline && (
                 <div
                   style={{
                     position:        'absolute',
-                    left:            sticker.x,
-                    top:             sticker.y + underlineTopOffset(sticker.textSize || 24),
+                    // Use display coords (paper * zoom) so the underline tracks
+                    // the sticker visually while in the editor.
+                    left:            displayX,
+                    top:             displayY + underlineTopOffset(sticker.textSize || 24),
                     transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
                     transformOrigin: 'top left',
                     pointerEvents:   'none',
@@ -530,8 +538,9 @@ export default function JournalCanvas({
           <div
             style={{
               position:        'absolute',
-              left:            sticker.x,
-              top:             sticker.y,
+              // Use display coords for the editor overlay too
+              left:            sticker.x * zoom,
+              top:             sticker.y * zoom,
               transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
               transformOrigin: 'top left',
               display:         'flex',
@@ -561,7 +570,6 @@ export default function JournalCanvas({
               maxLength={2000}
             />
 
-            {/* Bottom bar: underline toggle + char counter */}
             <div
               style={{
                 display:        'flex',
@@ -571,7 +579,6 @@ export default function JournalCanvas({
                 marginTop:      '3px',
               }}
             >
-              {/* Underline toggle button */}
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -616,7 +623,6 @@ export default function JournalCanvas({
                 </span>
               </button>
 
-              {/* Character counter */}
               <span
                 style={{
                   fontSize:   '11px',
@@ -633,4 +639,4 @@ export default function JournalCanvas({
       })()}
     </div>
   );
-  }
+}
