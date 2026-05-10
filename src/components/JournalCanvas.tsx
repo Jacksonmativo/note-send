@@ -368,7 +368,7 @@ export default function JournalCanvas({
                       color:      sticker.textColor || 'hsl(215,60%,35%)',
                       lineHeight: 1.4,
                       textAlign:  sticker.textAlign || 'center',
-                      width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
+                      width:      sticker.textWidth ? `${sticker.textWidth}px` : '120px',
                       minWidth:   '60px',
                       whiteSpace: 'pre-wrap',
                       wordBreak:  'break-word',
@@ -472,7 +472,7 @@ export default function JournalCanvas({
       >
         {stickersRef.current.map((sticker) => {
           const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-          const underlineWidth = sticker.textWidth ?? 220;
+          const underlineWidth = sticker.textWidth ?? 180;
           const underlineColor = sticker.textColor || INK_COLORS.blue;
 
           return (
