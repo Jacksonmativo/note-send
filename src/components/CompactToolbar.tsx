@@ -49,7 +49,7 @@ function DurationStepper({
 }) {
   const seconds = durationMs / 1000;
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         onClick={() => onChange(Math.max(1000, durationMs - 1000))}
         disabled={durationMs <= 1000}
@@ -131,70 +131,79 @@ export default function CompactToolbar({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="flex items-center gap-1 bg-card border border-border rounded-lg px-2.5 py-1.5 mb-2"
+        className="bg-card border border-border rounded-lg px-2.5 py-1.5 mb-2"
       >
-        {/* Slide navigation */}
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => onGoToSlide(currentIndex - 1)}
-            disabled={currentIndex === 0}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted disabled:opacity-30 transition-colors"
-            aria-label="Previous slide"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="text-[13px] font-medium min-w-[72px] text-center whitespace-nowrap">
-            {currentIndex + 1} / {slides.length}
-          </span>
-          <button
-            onClick={() => onGoToSlide(currentIndex + 1)}
-            disabled={currentIndex === slides.length - 1}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted disabled:opacity-30 transition-colors"
-            aria-label="Next slide"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+        {/* Row 1: nav + action buttons */}
+        <div className="flex items-center gap-1">
+          {/* Slide navigation */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onGoToSlide(currentIndex - 1)}
+              disabled={currentIndex === 0}
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted disabled:opacity-30 transition-colors"
+              aria-label="Previous slide"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-[13px] font-medium min-w-[56px] text-center whitespace-nowrap">
+              {currentIndex + 1} / {slides.length}
+            </span>
+            <button
+              onClick={() => onGoToSlide(currentIndex + 1)}
+              disabled={currentIndex === slides.length - 1}
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted disabled:opacity-30 transition-colors"
+              aria-label="Next slide"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Action buttons pushed to the right */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              onClick={onDownloadHD}
+              disabled={isExportingVideo}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border bg-transparent text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Image</span>
+            </button>
+            <button
+              onClick={onExportVideo}
+              disabled={slides.length < 2 || isExportingVideo}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          </div>
         </div>
 
-        {/* Divider */}
-        <div className="w-px h-5 bg-border mx-1 shrink-0" />
+        {/* Divider between rows */}
+        <div className="h-px bg-border my-1.5" />
 
-        {/* Panel toggles */}
+        {/* Row 2: panel toggles — full width, evenly spaced */}
         <div className="flex items-center gap-1">
-          <button className={panelBtnClass('slides')} onClick={() => togglePanel('slides')}>
+          <button
+            className={`${panelBtnClass('slides')} flex-1 justify-center`}
+            onClick={() => togglePanel('slides')}
+          >
             <LayoutGrid className="w-3.5 h-3.5" />
             Slides
           </button>
-          <button className={panelBtnClass('timing')} onClick={() => togglePanel('timing')}>
+          <button
+            className={`${panelBtnClass('timing')} flex-1 justify-center`}
+            onClick={() => togglePanel('timing')}
+          >
             <Clock className="w-3.5 h-3.5" />
             Timing
           </button>
-          <button className={panelBtnClass('audio')} onClick={() => togglePanel('audio')}>
+          <button
+            className={`${panelBtnClass('audio')} flex-1 justify-center`}
+            onClick={() => togglePanel('audio')}
+          >
             <Music className="w-3.5 h-3.5" />
             Audio
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="w-px h-5 bg-border mx-1 shrink-0" />
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <button
-            onClick={onDownloadHD}
-            disabled={isExportingVideo}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border bg-transparent text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Img
-          </button>
-          <button
-            onClick={onExportVideo}
-            disabled={slides.length < 2 || isExportingVideo}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors whitespace-nowrap"
-          >
-            <Film className="w-3.5 h-3.5" />
-            Export
           </button>
         </div>
       </motion.div>
@@ -316,7 +325,7 @@ export default function CompactToolbar({
             transition={{ duration: 0.15 }}
             className="bg-card border border-border rounded-lg p-3 mb-2"
           >
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <span className="text-[13px] font-semibold text-foreground">Slide timing</span>
               <div className="flex items-center gap-2">
                 {/* Mode toggle */}
@@ -325,7 +334,7 @@ export default function CompactToolbar({
                     <button
                       key={mode}
                       onClick={() => onTimingModeChange(mode)}
-                      className={`px-3 py-1 rounded text-[12px] font-semibold transition-all ${
+                      className={`px-2.5 py-1 rounded text-[12px] font-semibold transition-all ${
                         timingMode === mode
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-transparent text-muted-foreground'
