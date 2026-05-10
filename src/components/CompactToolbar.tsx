@@ -186,7 +186,7 @@ export default function CompactToolbar({
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border bg-transparent text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5" />
-            Image
+            Img
           </button>
           <button
             onClick={onExportVideo}
