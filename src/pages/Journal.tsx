@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import {
@@ -24,7 +24,7 @@ import type { PlacedSticker } from '@/components/DraggableSticker';
 import type { InkColor } from '@/components/StickerData';
 
 /* ─── Constants ─────────────────────────────────────────── */
-const PAPER_WIDTH = 720;
+const PAPER_WIDTH  = 720;
 const PAPER_HEIGHT = 1020;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 1.8;
@@ -44,7 +44,6 @@ const JournalPage = () => {
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
   const [isDrawing, setIsDrawing]   = useState(false);
   const [mode, setMode]             = useState<'writing' | 'math'>('writing');
-  // Always default to 100% zoom — no mobile auto-shrink
   const [zoom, setZoom]             = useState(1);
   const [showCoffeePopup, setShowCoffeePopup] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -59,7 +58,7 @@ const JournalPage = () => {
   const [fontFamily, setFontFamily]     = useState('Caveat');
   const [fontSize, setFontSize]         = useState(24);
 
-  const hiddenContainerRef = useRef<HTMLDivElement>(null);
+  // One ref per page — each points to an individual page wrapper div
   const hiddenPageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const currentPage    = pages[currentPageIndex];
 
@@ -67,7 +66,7 @@ const JournalPage = () => {
   const downloadAllPages = useCallback(async () => {
     setIsExporting(true);
 
-    // Wait for the hidden preview nodes to render fully
+    // Give React time to render all hidden preview nodes
     await new Promise((resolve) => setTimeout(resolve, 400));
 
     const images: string[] = [];
@@ -76,26 +75,33 @@ const JournalPage = () => {
       const node = hiddenPageRefs.current[i];
       if (!node) continue;
 
-      // Warm-up pass
-      await toPng(node, {
+      const captureOptions = {
         quality: 1,
         pixelRatio: 2,
         cacheBust: true,
         backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
-        width: PAPER_WIDTH,
+        // Explicitly tell html-to-image the exact pixel dimensions to capture.
+        // This prevents it from measuring the DOM node and accidentally picking
+        // up any fractional sizes or overflow.
+        width:  PAPER_WIDTH,
         height: PAPER_HEIGHT,
-      }).catch(() => null);
+        // IMPORTANT: style overrides applied to the cloned node before capture.
+        // We force transform:none and overflow:hidden so nothing outside the
+        // paper boundary leaks into the snapshot, and no zoom transform is
+        // accidentally inherited.
+        style: {
+          transform:       'none',
+          transformOrigin: 'top left',
+          overflow:        'hidden',
+          width:           `${PAPER_WIDTH}px`,
+          height:          `${PAPER_HEIGHT}px`,
+        },
+      };
 
-      // Real capture pass
-      const img = await toPng(node, {
-        quality: 1,
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
-        width: PAPER_WIDTH,
-        height: PAPER_HEIGHT,
-      });
-
+      // Warm-up pass (loads fonts / images into cache)
+      await toPng(node, captureOptions).catch(() => null);
+      // Real capture
+      const img = await toPng(node, captureOptions);
       images.push(img);
     }
 
@@ -173,6 +179,7 @@ const JournalPage = () => {
         textSize: fontSize,
         textAlign: 'left',
         textWidth: defaultWidth,
+        // These are paper-space coordinates — no zoom factor involved
         x: 60,
         y: 80 + Math.random() * 140,
         rotation: 0,
@@ -191,6 +198,7 @@ const JournalPage = () => {
         stickerId: sticker.id,
         emoji: sticker.emoji,
         imageUrl: sticker.image,
+        // Paper-space coordinates
         x: 50 + Math.random() * 220,
         y: 70 + Math.random() * 240,
         rotation: 0,
@@ -354,21 +362,23 @@ const JournalPage = () => {
         </div>
       </main>
 
-      {/* ══ Hidden pages for multi-page PDF export ════════════
-          Rendered off-screen at exact paper dimensions with no
-          transform/zoom so html-to-image captures pixel-perfect
-          positions matching what the user sees on canvas.      */}
+      {/* ══ Hidden pages for PDF export ════════════════════════
+          Each page is isolated in its own fixed-size div.
+          - position: fixed keeps them out of document flow entirely
+          - left: -99999px moves them off-screen (not display:none,
+            which would prevent html-to-image from measuring them)
+          - NO transform on any ancestor — critical so that
+            html-to-image doesn't pick up a zoom scale
+          - Each page div is exactly PAPER_WIDTH × PAPER_HEIGHT     */}
       <div
-        ref={hiddenContainerRef}
         aria-hidden
         style={{
-          position:      'absolute',
+          position:      'fixed',
           left:          -99999,
           top:           0,
           width:         PAPER_WIDTH,
           pointerEvents: 'none',
           zIndex:        -1,
-          overflow:      'hidden',
         }}
       >
         {pages.map((page, index) => (
@@ -376,11 +386,15 @@ const JournalPage = () => {
             key={page.id}
             ref={(el) => { hiddenPageRefs.current[index] = el; }}
             style={{
-              position: 'relative',
-              width:    PAPER_WIDTH,
-              height:   PAPER_HEIGHT,
-              overflow: 'hidden',
-              // Ensure no inherited transform skews the capture
+              // Each page is independently sized and positioned.
+              // Stacking them vertically at different `top` values
+              // ensures no page overlaps another during capture.
+              position:        'absolute',
+              top:             index * PAPER_HEIGHT,
+              left:            0,
+              width:           PAPER_WIDTH,
+              height:          PAPER_HEIGHT,
+              overflow:        'hidden',
               transform:       'none',
               transformOrigin: 'top left',
             }}
@@ -499,7 +513,6 @@ const JournalPage = () => {
 
             <div className="w-px bg-border my-2 shrink-0" />
 
-            {/* Download PDF */}
             <button
               onClick={downloadAllPages}
               disabled={isExporting}
@@ -515,7 +528,6 @@ const JournalPage = () => {
         </div>
       </div>
 
-      {/* Drawing overlay */}
       {isDrawing && (
         <DrawingCanvas
           onSave={handleAddDrawingSave}
@@ -523,7 +535,6 @@ const JournalPage = () => {
         />
       )}
 
-      {/* Coffee Popup */}
       <CoffeePopup isOpen={showCoffeePopup} onClose={() => setShowCoffeePopup(false)} />
     </div>
   );
