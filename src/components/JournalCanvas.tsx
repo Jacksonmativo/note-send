@@ -25,7 +25,6 @@ const HIGHLIGHT_PREVIEW: Record<string, string> = {
   gray:   'rgba(156,163,175,0.50)'
 };
 
-// Pen color map — matches InkColor values to real CSS colors
 const INK_COLORS: Record<string, string> = {
   blue:   'hsl(215,60%,35%)',
   black:  'hsl(220,20%,15%)',
@@ -35,30 +34,36 @@ const INK_COLORS: Record<string, string> = {
   orange: 'hsl(28,85%,48%)',
 };
 
-/**
- * Shared formula: how far below sticker.y (or the text div's top) the
- * underline sits.  Both interactive and preview must use this so the
- * downloaded image matches what you see in the editor.
- *
- * Breakdown:
- *   4px  — padding-top of the text div
- *   fontSize * 1.4 — one line of text at lineHeight 1.4
- *   1px  — small breathing gap
- *
- * For multi-line text this will sit below line 1, but it is at least
- * consistent between the two modes.
- */
 function underlineTopOffset(fontSize: number): number {
   return 4 + fontSize * 1.1 + 1;
 }
 
 /**
- * Generates a deterministic irregular SVG underline path.
- * Uses a seeded pseudo-random so the same text always gets
- * the same wobble — no jitter on every render.
+ * Measures the actual rendered width of the longest line of text.
+ * Used so underline and highlight end at the text, not the box edge.
  */
+function measureTextWidth(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  boxWidth: number
+): number {
+  if (!text) return boxWidth;
+  try {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    if (!ctx) return boxWidth;
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    const lines = text.split('\n');
+    const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    // Add horizontal padding (8px each side) and cap at box width
+    return Math.min(Math.ceil(maxLineWidth) + 16, boxWidth);
+  } catch {
+    return boxWidth;
+  }
+}
+
 function buildWobblePath(width: number, seed: number): string {
-  // Tiny seeded LCG so the path is stable across re-renders
   let s = seed;
   const rand = () => {
     s = (s * 1664525 + 1013904223) & 0xffffffff;
@@ -67,13 +72,12 @@ function buildWobblePath(width: number, seed: number): string {
 
   const segments = Math.max(6, Math.floor(width / 18));
   const step     = width / segments;
-  const amp      = 2.2; // vertical wobble amplitude (px)
+  const amp      = 2.2;
 
   let d = `M 0 ${amp + rand() * amp}`;
   for (let i = 1; i <= segments; i++) {
     const x  = i * step;
     const y  = amp + rand() * amp;
-    // Gentle quadratic bezier through a mid-control-point
     const cx = (i - 0.5) * step;
     const cy = amp * (0.2 + rand() * 1.6);
     d += ` Q ${cx} ${cy} ${x} ${y}`;
@@ -81,7 +85,6 @@ function buildWobblePath(width: number, seed: number): string {
   return d;
 }
 
-/** Irregular underline SVG — rendered inline so html-to-image captures it */
 function WobbleUnderline({
   width,
   color,
@@ -98,10 +101,10 @@ function WobbleUnderline({
       height={svgH}
       viewBox={`0 0 ${width} ${svgH}`}
       style={{
-        display:        'block',
-        overflow:       'visible',
-        pointerEvents:  'none',
-        marginTop:      '1px',
+        display:       'block',
+        overflow:      'visible',
+        pointerEvents: 'none',
+        marginTop:     '1px',
       }}
       aria-hidden="true"
     >
@@ -117,7 +120,6 @@ function WobbleUnderline({
   );
 }
 
-/** Shared canvas painter — works for both interactive and preview sizes */
 function paintGrid(
   canvas: HTMLCanvasElement,
   mode: 'writing' | 'math',
@@ -156,7 +158,6 @@ function paintGrid(
   }
 }
 
-/** Pure-CSS grid rendered as divs — used in previewMode so html-to-image captures it */
 function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
   if (mode === 'writing') {
     const lineSpacing = 24;
@@ -331,14 +332,25 @@ export default function JournalCanvas({
         <CssGrid mode={mode} />
 
         {stickersRef.current.map((sticker) => {
-          // Derive wobble seed from instanceId for stability
           const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-          const underlinkWidth = sticker.textWidth ?? 180;
-          const underlineColor = INK_COLORS[sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '215' ? 'blue'
+
+          const boxWidth = sticker.textWidth ?? 180;
+
+          // Measure actual text width so underline + highlight stop at the text edge
+          const actualWidth = measureTextWidth(
+            sticker.textContent ?? '',
+            sticker.textSize || 24,
+            sticker.textFont || 'Caveat',
+            boxWidth
+          );
+
+          const underlineColor = INK_COLORS[
+            sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '215' ? 'blue'
             : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '0'   ? 'red'
             : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '220' ? 'black'
             : sticker.textColor?.match(/hsl\((\d+)/)?.[1] === '140' ? 'green'
-            : 'blue'] ?? sticker.textColor ?? INK_COLORS.blue;
+            : 'blue'
+          ] ?? sticker.textColor ?? INK_COLORS.blue;
 
           return (
             <div
@@ -355,9 +367,6 @@ export default function JournalCanvas({
             >
               {/* Text sticker */}
               {sticker.textContent !== undefined && (
-                // Use `position: relative` wrapper so the underline can be
-                // absolutely positioned with the same offset formula used in
-                // interactive mode — this is what keeps them in sync on export.
                 <div style={{ position: 'relative' }}>
                   <div
                     style={{
@@ -368,17 +377,21 @@ export default function JournalCanvas({
                       color:      sticker.textColor || 'hsl(215,60%,35%)',
                       lineHeight: 1.4,
                       textAlign:  sticker.textAlign || 'center',
-                      width:      sticker.textWidth ? `${sticker.textWidth}px` : '120px',
+                      width:      `${boxWidth}px`,
                       minWidth:   '60px',
                       whiteSpace: 'pre-wrap',
                       wordBreak:  'break-word',
                     }}
                   >
+                    {/* Highlight: width matches actual text, not full box */}
                     {sticker.textHighlight && sticker.textHighlight !== 'none' && (
                       <span
                         style={{
                           position:     'absolute',
-                          inset:        0,
+                          top:          0,
+                          bottom:       0,
+                          left:         0,
+                          width:        `${actualWidth}px`,
                           background:   HIGHLIGHT_PREVIEW[sticker.textHighlight] ?? 'transparent',
                           borderRadius: 2,
                         }}
@@ -389,7 +402,7 @@ export default function JournalCanvas({
                     </span>
                   </div>
 
-                  {/* Underline: absolutely positioned using the shared offset formula */}
+                  {/* Underline: width matches actual text, not full box */}
                   {sticker.textUnderline && (
                     <div
                       style={{
@@ -400,7 +413,7 @@ export default function JournalCanvas({
                       }}
                     >
                       <WobbleUnderline
-                        width={underlinkWidth}
+                        width={actualWidth}
                         color={underlineColor}
                         seed={seed}
                       />
@@ -472,7 +485,16 @@ export default function JournalCanvas({
       >
         {stickersRef.current.map((sticker) => {
           const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-          const underlineWidth = sticker.textWidth ?? 180;
+          const boxWidth = sticker.textWidth ?? 180;
+
+          // Measure actual text width so underline stops at the text edge
+          const underlineWidth = measureTextWidth(
+            sticker.textContent ?? '',
+            sticker.textSize || 24,
+            sticker.textFont || 'Caveat',
+            boxWidth
+          );
+
           const underlineColor = sticker.textColor || INK_COLORS.blue;
 
           return (
@@ -495,7 +517,7 @@ export default function JournalCanvas({
                 zoom={zoom}
               />
 
-              {/* Underline: uses the shared offset formula so it matches the download */}
+              {/* Underline: width = actual text width, not box width */}
               {sticker.textContent !== undefined && sticker.textUnderline && (
                 <div
                   style={{
@@ -547,16 +569,16 @@ export default function JournalCanvas({
               onKeyDown={(e) => { if (e.key === 'Escape') setEditingId(null); }}
               className="bg-transparent p-2 text-sm leading-6 resize-none"
               style={{
-                minWidth:        '140px',
-                width:           sticker.textWidth ? `${sticker.textWidth}px` : '220px',
-                fontFamily:      `'${sticker.textFont || 'Caveat'}', cursive`,
-                fontSize:        `${sticker.textSize || 24}px`,
-                color:           sticker.textColor || 'hsl(215, 60%, 35%)',
-                textAlign:       sticker.textAlign || 'center',
-                outline:         'none',
-                border:          '1.5px solid #bfdbfe',
-                borderRadius:    '3px',
-                boxSizing:       'border-box',
+                minWidth:     '140px',
+                width:        sticker.textWidth ? `${sticker.textWidth}px` : '220px',
+                fontFamily:   `'${sticker.textFont || 'Caveat'}', cursive`,
+                fontSize:     `${sticker.textSize || 24}px`,
+                color:        sticker.textColor || 'hsl(215, 60%, 35%)',
+                textAlign:    sticker.textAlign || 'center',
+                outline:      'none',
+                border:       '1.5px solid #bfdbfe',
+                borderRadius: '3px',
+                boxSizing:    'border-box',
               }}
               maxLength={2000}
             />
@@ -571,7 +593,6 @@ export default function JournalCanvas({
                 marginTop:      '3px',
               }}
             >
-              {/* Underline toggle button */}
               <button
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -585,15 +606,15 @@ export default function JournalCanvas({
                 }}
                 title={hasUnderline ? 'Remove underline' : 'Add irregular underline'}
                 style={{
-                  display:        'flex',
-                  alignItems:     'center',
-                  gap:            '5px',
-                  padding:        '2px 7px',
-                  borderRadius:   '5px',
-                  border:         `1.5px solid ${hasUnderline ? underlineColor : '#d1d5db'}`,
-                  background:     hasUnderline ? `${underlineColor}18` : 'transparent',
-                  cursor:         'pointer',
-                  userSelect:     'none',
+                  display:      'flex',
+                  alignItems:   'center',
+                  gap:          '5px',
+                  padding:      '2px 7px',
+                  borderRadius: '5px',
+                  border:       `1.5px solid ${hasUnderline ? underlineColor : '#d1d5db'}`,
+                  background:   hasUnderline ? `${underlineColor}18` : 'transparent',
+                  cursor:       'pointer',
+                  userSelect:   'none',
                 }}
               >
                 <svg width="22" height="7" viewBox="0 0 22 7" aria-hidden="true">
@@ -616,7 +637,6 @@ export default function JournalCanvas({
                 </span>
               </button>
 
-              {/* Character counter */}
               <span
                 style={{
                   fontSize:   '11px',
@@ -633,4 +653,4 @@ export default function JournalCanvas({
       })()}
     </div>
   );
-    }
+}
