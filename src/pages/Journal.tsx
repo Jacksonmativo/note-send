@@ -80,15 +80,8 @@ const JournalPage = () => {
         pixelRatio: 2,
         cacheBust: true,
         backgroundColor: mode === 'writing' ? '#fafaf8' : '#ffffff',
-        // Explicitly tell html-to-image the exact pixel dimensions to capture.
-        // This prevents it from measuring the DOM node and accidentally picking
-        // up any fractional sizes or overflow.
         width:  PAPER_WIDTH,
         height: PAPER_HEIGHT,
-        // IMPORTANT: style overrides applied to the cloned node before capture.
-        // We force transform:none and overflow:hidden so nothing outside the
-        // paper boundary leaks into the snapshot, and no zoom transform is
-        // accidentally inherited.
         style: {
           transform:       'none',
           transformOrigin: 'top left',
@@ -179,7 +172,6 @@ const JournalPage = () => {
         textSize: fontSize,
         textAlign: 'left',
         textWidth: defaultWidth,
-        // These are paper-space coordinates — no zoom factor involved
         x: 60,
         y: 80 + Math.random() * 140,
         rotation: 0,
@@ -198,7 +190,6 @@ const JournalPage = () => {
         stickerId: sticker.id,
         emoji: sticker.emoji,
         imageUrl: sticker.image,
-        // Paper-space coordinates
         x: 50 + Math.random() * 220,
         y: 70 + Math.random() * 240,
         rotation: 0,
@@ -363,13 +354,13 @@ const JournalPage = () => {
       </main>
 
       {/* ══ Hidden pages for PDF export ════════════════════════
-          Each page is isolated in its own fixed-size div.
-          - position: fixed keeps them out of document flow entirely
-          - left: -99999px moves them off-screen (not display:none,
-            which would prevent html-to-image from measuring them)
-          - NO transform on any ancestor — critical so that
-            html-to-image doesn't pick up a zoom scale
-          - Each page div is exactly PAPER_WIDTH × PAPER_HEIGHT     */}
+          - position: fixed + left: -99999 renders off-screen
+            without display:none so html-to-image can capture
+          - height: 0 + overflow: visible means zero viewport
+            impact while children still render and are capturable
+          - Each child page is position:absolute at its own
+            top offset so pages never overlap during capture
+          - NO transform anywhere — critical for correct positions */}
       <div
         aria-hidden
         style={{
@@ -377,6 +368,8 @@ const JournalPage = () => {
           left:          -99999,
           top:           0,
           width:         PAPER_WIDTH,
+          height:        0,
+          overflow:      'visible',
           pointerEvents: 'none',
           zIndex:        -1,
         }}
@@ -386,9 +379,6 @@ const JournalPage = () => {
             key={page.id}
             ref={(el) => { hiddenPageRefs.current[index] = el; }}
             style={{
-              // Each page is independently sized and positioned.
-              // Stacking them vertically at different `top` values
-              // ensures no page overlaps another during capture.
               position:        'absolute',
               top:             index * PAPER_HEIGHT,
               left:            0,
