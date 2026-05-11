@@ -14,7 +14,8 @@ export interface PlacedSticker {
   textSize?: number;
   textAlign?: 'left' | 'center' | 'right';
   textWidth?: number;
-  textHighlight?: string; // e.g. 'yellow' | 'pink' | 'none'
+  textHighlight?: string;
+  textUnderline?: boolean;
   x: number;
   y: number;
   rotation: number;
@@ -35,7 +36,6 @@ interface DraggableStickerProps {
   showTextStretch?: boolean;
   showTextResize?: boolean;
   containerRef: React.RefObject<HTMLDivElement>;
-  /** Current canvas zoom level — used to convert screen px → paper px */
   zoom?: number;
 }
 
@@ -48,6 +48,31 @@ const HIGHLIGHT_CSS: Record<string, string> = {
   lime:   'rgba(163,230,53,0.50)',
   none:   'transparent',
 };
+
+/**
+ * Measures the actual rendered width of the longest line of text.
+ * Used so highlight stops at the text edge, not the box edge.
+ */
+function measureTextWidth(
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  boxWidth: number
+): number {
+  if (!text) return boxWidth;
+  try {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    if (!ctx) return boxWidth;
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    const lines = text.split('\n');
+    const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    // Add horizontal padding (8px each side) and cap at box width
+    return Math.min(Math.ceil(maxLineWidth) + 16, boxWidth);
+  } catch {
+    return boxWidth;
+  }
+}
 
 /** Renders a hand-drawn-looking highlight behind the text using SVG */
 function HandHighlight({ color, width, height }: { color: string; width: number; height: number }) {
@@ -84,9 +109,18 @@ function HandHighlight({ color, width, height }: { color: string; width: number;
     ' Z';
 
   return (
+    // Use explicit width/height instead of 100% so the SVG only
+    // covers the actual text width, not the full text box
     <svg
-      className="absolute inset-0 pointer-events-none"
-      style={{ width: '100%', height: '100%', overflow: 'visible' }}
+      className="absolute pointer-events-none"
+      style={{
+        position: 'absolute',
+        top:      0,
+        left:     0,
+        width:    width,
+        height:   height,
+        overflow: 'visible',
+      }}
       aria-hidden
     >
       <path d={pathD} fill={fill} />
@@ -114,7 +148,6 @@ const DraggableSticker = ({
   const stickerRef = useRef(sticker);
   stickerRef.current = sticker;
   const elemRef = useRef<HTMLDivElement>(null);
-  // Keep a live ref to zoom so event handlers always read the latest value
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
 
@@ -123,7 +156,6 @@ const DraggableSticker = ({
     (rawX: number, rawY: number) => {
       const container = containerRef.current;
       if (!container) return { x: rawX, y: rawY };
-      // Container's client rect is in screen px; convert to paper px via zoom
       const rect = container.getBoundingClientRect();
       const paperW = rect.width  / zoomRef.current;
       const paperH = rect.height / zoomRef.current;
@@ -152,7 +184,6 @@ const DraggableSticker = ({
       };
 
       const handleMouseMove = (e: MouseEvent) => {
-        // Divide screen-pixel delta by zoom → paper-space delta
         const dx = (e.clientX - dragStart.current.x) / zoomRef.current;
         const dy = (e.clientY - dragStart.current.y) / zoomRef.current;
         const { x, y } = clampPos(
@@ -200,7 +231,6 @@ const DraggableSticker = ({
       const handleTouchMove = (e: TouchEvent) => {
         e.preventDefault();
         const t = e.touches[0];
-        // Divide screen-pixel delta by zoom → paper-space delta
         const dx = (t.clientX - dragStart.current.x) / zoomRef.current;
         const dy = (t.clientY - dragStart.current.y) / zoomRef.current;
         const { x, y } = clampPos(
@@ -354,17 +384,25 @@ const DraggableSticker = ({
   const textBoxWidth  = sticker.textWidth ?? 180;
   const textBoxHeight = (sticker.textSize ?? 24) * 1.6;
 
+  // Measure actual text width so highlight ends at the text, not the box edge
+  const actualTextWidth = measureTextWidth(
+    hidePlaceholder ? '' : (sticker.textContent || 'Double-click to edit'),
+    sticker.textSize ?? 24,
+    sticker.textFont || 'Caveat',
+    textBoxWidth
+  );
+
   return (
     <div
       ref={elemRef}
       data-sticker-id={sticker.instanceId}
       className="absolute select-none group"
       style={{
-        left: sticker.x,
-        top: sticker.y,
-        transform: `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
-        cursor: isDragging ? 'grabbing' : 'grab',
-        zIndex: isDragging ? 50 : isSelected ? 20 : 10,
+        left:        sticker.x,
+        top:         sticker.y,
+        transform:   `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
+        cursor:      isDragging ? 'grabbing' : 'grab',
+        zIndex:      isDragging ? 50 : isSelected ? 20 : 10,
         touchAction: 'none',
       }}
       onMouseDown={handleMouseDown}
@@ -384,11 +422,16 @@ const DraggableSticker = ({
             color:      sticker.textColor || 'hsl(215, 60%, 35%)',
             lineHeight: '1.4',
             textAlign:  sticker.textAlign || 'center',
-            width:      sticker.textWidth ? `${sticker.textWidth}px` : '180px',
+            width:      `${textBoxWidth}px`,
             minWidth:   '60px',
           }}
         >
-          <HandHighlight color={hlColor} width={textBoxWidth} height={textBoxHeight} />
+          {/* Pass actualTextWidth so highlight stops at the text edge */}
+          <HandHighlight
+            color={hlColor}
+            width={actualTextWidth}
+            height={textBoxHeight}
+          />
           <span className="relative">
             {hidePlaceholder ? '' : (sticker.textContent || 'Double-click to edit')}
           </span>
@@ -410,9 +453,9 @@ const DraggableSticker = ({
         <span
           className="text-4xl select-none pointer-events-none"
           style={{
-            filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.18))',
+            filter:           'drop-shadow(0 1px 2px rgba(0,0,0,0.18))',
             WebkitTextStroke: '3px white',
-            paintOrder: 'stroke fill',
+            paintOrder:       'stroke fill',
           }}
         >
           {sticker.emoji}
