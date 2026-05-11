@@ -17,12 +17,12 @@ interface JournalCanvasProps {
 const PAPER_WIDTH  = 720;
 const PAPER_HEIGHT = 1020;
 
-const HIGHLIGHT_PREVIEW: Record<string, string> = {
+const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: 'rgba(253,224,71,0.55)',
   pink:   'rgba(249,168,212,0.60)',
   lime:   'rgba(163,230,53,0.50)',
   blue:   'rgba(96,165,250,0.50)',
-  gray:   'rgba(156,163,175,0.50)'
+  gray:   'rgba(156,163,175,0.50)',
 };
 
 const INK_COLORS: Record<string, string> = {
@@ -38,10 +38,6 @@ function underlineTopOffset(fontSize: number): number {
   return 4 + fontSize * 1.1 + 1;
 }
 
-/**
- * Measures the actual rendered width of the longest line of text.
- * Used so underline and highlight end at the text, not the box edge.
- */
 function measureTextWidth(
   text: string,
   fontSize: number,
@@ -56,11 +52,68 @@ function measureTextWidth(
     ctx.font = `${fontSize}px ${fontFamily}`;
     const lines = text.split('\n');
     const maxLineWidth = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    // Add horizontal padding (8px each side) and cap at box width
     return Math.min(Math.ceil(maxLineWidth) + 16, boxWidth);
   } catch {
     return boxWidth;
   }
+}
+
+/**
+ * Irregular hand-drawn highlight — same in both interactive and preview mode
+ * so the PDF matches what you see on screen.
+ */
+function HandHighlight({
+  color,
+  width,
+  height,
+}: {
+  color: string;
+  width: number;
+  height: number;
+}) {
+  const fill = HIGHLIGHT_COLORS[color] ?? 'transparent';
+  if (!color || color === 'none' || fill === 'transparent') return null;
+
+  const seed = color.charCodeAt(0);
+  const wobble = (i: number, amp: number) =>
+    Math.sin(i * 3.7 + seed) * amp + Math.cos(i * 2.1 + seed) * amp * 0.5;
+
+  const steps = 12;
+  const topPoints: [number, number][] = [];
+  const botPoints: [number, number][] = [];
+  const topY = height * 0.08;
+  const botY = height * 0.92;
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const x = t * width;
+    topPoints.push([x + wobble(i, 1.8),     topY + wobble(i + 5, 2.5)]);
+    botPoints.push([x + wobble(i + 2, 1.6), botY + wobble(i + 8, 2.2)]);
+  }
+
+  const pathD =
+    `M ${topPoints[0][0]} ${topPoints[0][1]} ` +
+    topPoints.slice(1).map(([x, y]) => `L ${x} ${y}`).join(' ') +
+    ' ' +
+    botPoints.slice().reverse().map(([x, y]) => `L ${x} ${y}`).join(' ') +
+    ' Z';
+
+  return (
+    <svg
+      aria-hidden
+      style={{
+        position:      'absolute',
+        top:           0,
+        left:          0,
+        width:         width,
+        height:        height,
+        overflow:      'visible',
+        pointerEvents: 'none',
+      }}
+    >
+      <path d={pathD} fill={fill} />
+    </svg>
+  );
 }
 
 function buildWobblePath(width: number, seed: number): string {
@@ -69,11 +122,9 @@ function buildWobblePath(width: number, seed: number): string {
     s = (s * 1664525 + 1013904223) & 0xffffffff;
     return (s >>> 0) / 0xffffffff;
   };
-
   const segments = Math.max(6, Math.floor(width / 18));
   const step     = width / segments;
   const amp      = 2.2;
-
   let d = `M 0 ${amp + rand() * amp}`;
   for (let i = 1; i <= segments; i++) {
     const x  = i * step;
@@ -130,7 +181,6 @@ function paintGrid(
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-
   if (mode === 'writing') {
     ctx.fillStyle = '#fafaf8';
     ctx.fillRect(0, 0, w, h);
@@ -164,73 +214,27 @@ function CssGrid({ mode }: { mode: 'writing' | 'math' }) {
     const startY = lineSpacing * 3;
     const lines: number[] = [];
     for (let y = startY; y <= PAPER_HEIGHT; y += lineSpacing) lines.push(y);
-
     return (
       <>
         {lines.map((y) => (
-          <div
-            key={y}
-            style={{
-              position:      'absolute',
-              left:          0,
-              top:           y,
-              width:         '100%',
-              height:        0,
-              borderTop:     '0.7px solid #9ec8e8',
-              pointerEvents: 'none',
-            }}
-          />
+          <div key={y} style={{ position: 'absolute', left: 0, top: y, width: '100%', height: 0, borderTop: '0.7px solid #9ec8e8', pointerEvents: 'none' }} />
         ))}
-        <div
-          style={{
-            position:      'absolute',
-            top:           0,
-            left:          62,
-            width:         0,
-            height:        '100%',
-            borderLeft:    '1.2px solid #c0392b',
-            pointerEvents: 'none',
-          }}
-        />
+        <div style={{ position: 'absolute', top: 0, left: 62, width: 0, height: '100%', borderLeft: '1.2px solid #c0392b', pointerEvents: 'none' }} />
       </>
     );
   }
-
   const step = 28;
   const vLines: number[] = [];
   const hLines: number[] = [];
   for (let x = step; x < PAPER_WIDTH;  x += step) vLines.push(x);
   for (let y = step; y < PAPER_HEIGHT; y += step) hLines.push(y);
-
   return (
     <>
       {vLines.map((x) => (
-        <div
-          key={`v${x}`}
-          style={{
-            position:      'absolute',
-            top:           0,
-            left:          x,
-            width:         0,
-            height:        '100%',
-            borderLeft:    '0.9px solid #6b7280',
-            pointerEvents: 'none',
-          }}
-        />
+        <div key={`v${x}`} style={{ position: 'absolute', top: 0, left: x, width: 0, height: '100%', borderLeft: '0.9px solid #6b7280', pointerEvents: 'none' }} />
       ))}
       {hLines.map((y) => (
-        <div
-          key={`h${y}`}
-          style={{
-            position:      'absolute',
-            left:          0,
-            top:           y,
-            width:         '100%',
-            height:        0,
-            borderTop:     '0.9px solid #6b7280',
-            pointerEvents: 'none',
-          }}
-        />
+        <div key={`h${y}`} style={{ position: 'absolute', left: 0, top: y, width: '100%', height: 0, borderTop: '0.9px solid #6b7280', pointerEvents: 'none' }} />
       ))}
     </>
   );
@@ -314,7 +318,7 @@ export default function JournalCanvas({
   }, [editingId, editText, setStickers]);
 
   /* ══════════════════════════════════════════════════════
-     PREVIEW MODE
+     PREVIEW MODE — used by html-to-image for PDF export
   ══════════════════════════════════════════════════════ */
   if (previewMode) {
     return (
@@ -333,13 +337,14 @@ export default function JournalCanvas({
 
         {stickersRef.current.map((sticker) => {
           const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+          const boxWidth    = sticker.textWidth ?? 180;
+          const textSize    = sticker.textSize || 24;
+          const textHeight  = textSize * 1.6;
 
-          const boxWidth = sticker.textWidth ?? 180;
-
-          // Measure actual text width so underline + highlight stop at the text edge
+          // Actual text width so highlight + underline end at the text edge
           const actualWidth = measureTextWidth(
             sticker.textContent ?? '',
-            sticker.textSize || 24,
+            textSize,
             sticker.textFont || 'Caveat',
             boxWidth
           );
@@ -373,7 +378,7 @@ export default function JournalCanvas({
                       position:   'relative',
                       padding:    '4px 8px',
                       fontFamily: `'${sticker.textFont || 'Caveat'}', cursive`,
-                      fontSize:   `${sticker.textSize || 24}px`,
+                      fontSize:   `${textSize}px`,
                       color:      sticker.textColor || 'hsl(215,60%,35%)',
                       lineHeight: 1.4,
                       textAlign:  sticker.textAlign || 'center',
@@ -383,18 +388,12 @@ export default function JournalCanvas({
                       wordBreak:  'break-word',
                     }}
                   >
-                    {/* Highlight: width matches actual text, not full box */}
+                    {/* Irregular HandHighlight SVG — matches interactive mode exactly */}
                     {sticker.textHighlight && sticker.textHighlight !== 'none' && (
-                      <span
-                        style={{
-                          position:     'absolute',
-                          top:          0,
-                          bottom:       0,
-                          left:         0,
-                          width:        `${actualWidth}px`,
-                          background:   HIGHLIGHT_PREVIEW[sticker.textHighlight] ?? 'transparent',
-                          borderRadius: 2,
-                        }}
+                      <HandHighlight
+                        color={sticker.textHighlight}
+                        width={actualWidth}
+                        height={textHeight}
                       />
                     )}
                     <span style={{ position: 'relative' }}>
@@ -402,13 +401,12 @@ export default function JournalCanvas({
                     </span>
                   </div>
 
-                  {/* Underline: width matches actual text, not full box */}
                   {sticker.textUnderline && (
                     <div
                       style={{
                         position:      'absolute',
                         left:          0,
-                        top:           underlineTopOffset(sticker.textSize || 24),
+                        top:           underlineTopOffset(textSize),
                         pointerEvents: 'none',
                       }}
                     >
@@ -484,17 +482,14 @@ export default function JournalCanvas({
         style={{ inset: 0, overflow: 'visible' }}
       >
         {stickersRef.current.map((sticker) => {
-          const seed = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-          const boxWidth = sticker.textWidth ?? 180;
-
-          // Measure actual text width so underline stops at the text edge
+          const seed         = sticker.instanceId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+          const boxWidth     = sticker.textWidth ?? 180;
           const underlineWidth = measureTextWidth(
             sticker.textContent ?? '',
             sticker.textSize || 24,
             sticker.textFont || 'Caveat',
             boxWidth
           );
-
           const underlineColor = sticker.textColor || INK_COLORS.blue;
 
           return (
@@ -517,7 +512,6 @@ export default function JournalCanvas({
                 zoom={zoom}
               />
 
-              {/* Underline: width = actual text width, not box width */}
               {sticker.textContent !== undefined && sticker.textUnderline && (
                 <div
                   style={{
@@ -544,8 +538,7 @@ export default function JournalCanvas({
       {editingId && (() => {
         const sticker = stickersRef.current.find((s) => s.instanceId === editingId);
         if (!sticker) return null;
-
-        const hasUnderline = !!sticker.textUnderline;
+        const hasUnderline   = !!sticker.textUnderline;
         const underlineColor = sticker.textColor || INK_COLORS.blue;
 
         return (
@@ -583,7 +576,6 @@ export default function JournalCanvas({
               maxLength={2000}
             />
 
-            {/* Bottom bar: underline toggle + char counter */}
             <div
               style={{
                 display:        'flex',
@@ -637,14 +629,7 @@ export default function JournalCanvas({
                 </span>
               </button>
 
-              <span
-                style={{
-                  fontSize:   '11px',
-                  color:      '#9ca3af',
-                  fontFamily: 'sans-serif',
-                  lineHeight: 1,
-                }}
-              >
+              <span style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'sans-serif', lineHeight: 1 }}>
                 {editText.length}/2000
               </span>
             </div>
