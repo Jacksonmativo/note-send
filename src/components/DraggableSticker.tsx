@@ -109,8 +109,6 @@ function HandHighlight({ color, width, height }: { color: string; width: number;
     ' Z';
 
   return (
-    // Use explicit width/height instead of 100% so the SVG only
-    // covers the actual text width, not the full text box
     <svg
       className="absolute pointer-events-none"
       style={{
@@ -398,12 +396,18 @@ const DraggableSticker = ({
       data-sticker-id={sticker.instanceId}
       className="absolute select-none group"
       style={{
-        left:        sticker.x,
-        top:         sticker.y,
-        transform:   `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
-        cursor:      isDragging ? 'grabbing' : 'grab',
-        zIndex:      isDragging ? 50 : isSelected ? 20 : 10,
-        touchAction: 'none',
+        left:            sticker.x,
+        top:             sticker.y,
+        // ✅ FIX: transformOrigin must be 'top left' to match the preview/PDF
+        // mode in JournalCanvas. Without this, scale() and rotate() anchor to
+        // the element center (50% 50%) in the browser but to 'top left' in the
+        // PDF capture, causing every scaled or rotated sticker to shift position
+        // in the exported PDF.
+        transformOrigin: 'top left',
+        transform:       `rotate(${sticker.rotation}deg) scale(${sticker.scale})`,
+        cursor:          isDragging ? 'grabbing' : 'grab',
+        zIndex:          isDragging ? 50 : isSelected ? 20 : 10,
+        touchAction:     'none',
       }}
       onMouseDown={handleMouseDown}
       onDoubleClick={(e) => {
